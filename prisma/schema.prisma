@@ -1,0 +1,30 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model PositionWithShares {
+  id           Int      @id
+  goblin       String   @db.VarChar(255)
+  owner        String   @db.VarChar(255)
+  debtShare    String   @db.VarChar(255)
+  goblinShares String   @db.VarChar(255)
+  isActive     Boolean  @default(false)
+  updatedAt    DateTime @default(now())
+}
+
+model Events {
+  transactionIndex Int      @id
+  event            String   @db.VarChar(255)
+  address          String   @db.VarChar(255)
+  blockNumber      Int
+  returnValues     Json?
+  updatedAt        DateTime @default(now())
+}
