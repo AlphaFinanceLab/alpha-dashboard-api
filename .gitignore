@@ -13,6 +13,8 @@ node_modules/**
 yarn-error.log
 **/yarn-error.log
 
+src/graphql/generated.ts
 .env
 .vscode/launch.json
+mercurius-schema.json
 TODO

@@ -50,6 +50,7 @@ https://docs.google.com/document/d/1ThySLHlsDl6NGk9fWr6lyxa0AwhqkLt3WDpmVmuautg/
 References:
 [Prisma setup](https://www.prisma.io/docs/getting-started/setup-prisma/start-from-scratch/install-prisma-client-typescript-postgres/)
 [Nvm setup](https://github.com/nvm-sh/nvm)
+[Mercurius codegen](https://github.com/mercurius-js/mercurius/blob/master/docs/typescript.md)
 
 Install yarn, nvm, nodejs, have a postgresql db, edit `.env` file. Then run:
 ```sh
@@ -60,3 +61,15 @@ npx prisma migrate dev --name init
 
 * Prisma is a library that includes schema definition, migration and query tooling. Db settings and definitions
 are at `./prisma/schema.prisma`
+
+
+
+# About data mining
+
+To sync all event data from the set of BSC smart contracts, run:
+```
+yarn bsc:sync_events
+```
+
+This will try to fill all the new events at the bank contract (since the last block stored at db or from the contract starting block), and fill the EventsBSC db table. While doing sync, there are many contract requests done (to Masterchef, to coingecko, to goblin contract, to lp contract, etc) that could fail, the script tries to retry the different parts, while building the object at the db. Most of the dinamic values are stored as jsonb postgres objects. Each event payload is stored at the `returnValues` table field, and the dynamic values are stored as jsonb at `contextValues`, including coingecko, lp, masterchef, gobling, etc.
+

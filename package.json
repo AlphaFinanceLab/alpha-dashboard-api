@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "npx nodemon",
     "clear": "rm -rf ./build",
     "build": "npx tsc --project ./tsconfig.json",
     "bsc:sync_positions": "npx ts-node src/bsc/bsc_sync_positions.ts",
@@ -27,9 +28,17 @@
   },
   "dependencies": {
     "@prisma/client": "2.25.0",
+    "axios": "0.21.1",
     "bignumber.js": "9.0.1",
+    "date-fns": "2.22.1",
+    "date-fns-tz": "1.1.4",
     "dotenv": "10.0.0",
+    "ethereum-block-by-date": "1.4.0",
     "ethers": "5.4.0",
+    "fastify": "3.18.1",
+    "mercurius": "7.9.1",
+    "mercurius-codegen": "1.6.1",
+    "nodemon": "2.0.9",
     "prisma": "2.25.0",
     "typescript": "4.3.4",
     "web3": "1.3.6"

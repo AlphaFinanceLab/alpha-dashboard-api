@@ -2,21 +2,70 @@
 import Web3 from 'web3';
 import { EventData } from 'web3-eth-contract';
 // import { ethers } from "ethers";
-import { HttpProvider } from 'web3-core';
 import { AbiItem } from 'web3-utils';
 import BANK_ABI from '../abis/bank_abi.json';
 import GOBLIN_ABI from '../abis/goblin_abi.json';
+import MASTERCHEF_ABI from '../abis/masterchef_abi.json';
+import LP_TOKEN_ABI from '../abis/lp_token_abi.json';
+import { getCoinsInfoAndHistoryMarketData, ICoinWithInfoAndUsdPrice } from '../../lib/coingecko';
 
 export const BANK_PROXY_ADDRESS = '0x3bb5f6285c312fc7e1877244103036ebbeda193d';
 export const BANK_IMPLEMENTATION_ADDRESS = '0x35cfacc93244fc94d26793cd6e68f59976380b3e';
 const EMPTY_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-// Queries the next position id from the bank contract
-export async function getBankNextPositionId(provider: HttpProvider): Promise<string | null> {
+async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
-        const web3 = new Web3(provider);
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
-        const nextPositionID: string = await contract.methods.nextPositionID().call();
+        const reservePool: string = await contract.methods.reservePool().call({}, atBlockN);
+        return reservePool;
+    } catch (err) {
+        console.error(`[ERROR reservePool] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
+        return null;
+    }
+}
+
+async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | null> {
+    try {
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const glbDebtVal: string = await contract.methods.glbDebtVal().call({}, atBlockN);
+        return glbDebtVal;
+    } catch (err) {
+        console.error(`[ERROR getGlbDebtVal] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
+        return null;
+    }
+}
+
+async function getTotalBNB(web3: Web3, atBlockN?: number): Promise<string | null> {
+    try {
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const totalBNB: string = await contract.methods.totalBNB().call({}, atBlockN);
+        return totalBNB;
+    } catch (err) {
+        console.error(`[ERROR getTotalBNB] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
+        return null;
+    }
+}
+
+export async function syncBankValues(web3: Web3, atBlockN?: number) {
+    try {
+        const reservePool = await getReservePool(web3, atBlockN);
+        const glbDebt = await getGlbDebtVal(web3, atBlockN);
+        const totalBNB = await getTotalBNB(web3, atBlockN);
+        if (!reservePool || !glbDebt || !totalBNB) {
+            throw new Error(`Invalid sync values ${JSON.stringify({ reservePool, glbDebt, totalBNB, atBlockN })}`);
+        }
+        return { reservePool, glbDebt, totalBNB };
+    } catch (err) {
+        console.error(`[ERROR syncBankValues] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
+        return;
+    }
+}
+
+// Queries the next position id from the bank contract
+export async function getBankNextPositionId(web3: Web3, atBlockN?: number): Promise<string | null> {
+    try {
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const nextPositionID: string = await contract.methods.nextPositionID().call({}, atBlockN);
         return nextPositionID;
     } catch (err) {
         console.error(`[ERROR getBankNextPositionId] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
@@ -30,11 +79,10 @@ type IBankPosition = {
     debtShare: string; // uint256
 }
 // Given a position id, it queries the bank contract for the goblin, owner and debtShare properties
-async function getBankPositionById(provider: HttpProvider, positionId: number): Promise<IBankPosition | null> {
+async function getBankPositionById(web3: Web3, positionId: number, atBlockN?: number): Promise<IBankPosition | null> {
     try {
-        const web3 = new Web3(provider);
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
-        const position: IBankPosition = await contract.methods.positions(positionId).call();
+        const position: IBankPosition = await contract.methods.positions(positionId).call({}, atBlockN);
         if (position.goblin === EMPTY_ADDRESS || position.owner === EMPTY_ADDRESS) {
             return null
         }
@@ -45,15 +93,71 @@ async function getBankPositionById(provider: HttpProvider, positionId: number): 
     }
 }
 
-// Given a position id, it queries goblin contract to get it's shares property
-async function getGoblinSharesById(provider: HttpProvider, goblinAddr: string, positionId: number): Promise<any | null> {
+type IGoblinLPPayload = {
+    userInfo?: {
+        amount: string;
+        rewardDebt: string;
+    } | null;
+    reserves?: {
+        _blockTimestampLast: string;
+        _reserve0: string;
+        _reserve1: string;
+    } | null;
+    totalSupply: string;
+    decimals: string;
+    token0: string;
+    token1: string;
+};
+// calculate how much share the goblin have in that pool => goblinLpAmount/lpTotalSupply
+async function getGoblinLPPayload(
+    web3: Web3,
+    lpToken: string,
+    masterChef: string,
+    goblinPID: string,
+    globlinAddr: string,
+    atBlockN?: number,
+): Promise<IGoblinLPPayload | null> {
     try {
-        const web3 = new Web3(provider);
-        const contract = new web3.eth.Contract((GOBLIN_ABI as unknown) as AbiItem, goblinAddr);
-        const shares: string = await contract.methods.shares(positionId).call();
-        return shares;
+        const contractMC = new web3.eth.Contract((MASTERCHEF_ABI as unknown) as AbiItem, masterChef);
+        const userInfo: IGoblinLPPayload['userInfo'] = await contractMC.methods.userInfo(goblinPID, globlinAddr).call({}, atBlockN);
+        const contractLP = new web3.eth.Contract((LP_TOKEN_ABI as unknown) as AbiItem, lpToken);
+        const totalSupply: string = await contractLP.methods.totalSupply().call({}, atBlockN);
+        const decimals: string = await contractLP.methods.decimals().call({}, atBlockN);
+        const token0: string = await contractLP.methods.token0().call({}, atBlockN);
+        const token1: string = await contractLP.methods.token1().call({}, atBlockN);
+        const reserves: IGoblinLPPayload['reserves'] = await contractLP.methods.getReserves().call({}, atBlockN);
+        return { userInfo, totalSupply, decimals, token0, token1, reserves };
     } catch (err) {
-        console.error(`[ERROR getGoblinSharesById] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
+        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
+        return null;
+    }
+}
+
+type IGoblinPayload = {
+    shares: string;
+    lpToken: string;
+    masterChef: string;
+    pid: string;
+    lpPayload?: IGoblinLPPayload | null;
+};
+
+// Given a position id, it queries goblin contract to get it's shares property
+async function getGoblinPayload(
+    web3: Web3,
+    goblinAddr: string,
+    positionId: number,
+    atBlockN?: number,
+): Promise<IGoblinPayload | null> {
+    try {
+        const contract = new web3.eth.Contract((GOBLIN_ABI as unknown) as AbiItem, goblinAddr);
+        const shares: string = await contract.methods.shares(positionId).call({}, atBlockN);
+        const lpToken: string = await contract.methods.lpToken().call({}, atBlockN);
+        const masterChef: string = await contract.methods.masterChef().call({}, atBlockN);
+        const pid: string = await contract.methods.pid().call({}, atBlockN);
+        const lpPayload = await getGoblinLPPayload(web3, lpToken, masterChef, pid, goblinAddr, atBlockN);
+        return { shares, lpToken, masterChef, pid, lpPayload };
+    } catch (err) {
+        console.error(`[ERROR getGoblinPayload] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
         return null;
     }
 }
@@ -63,75 +167,101 @@ export type IPositionWithShares = {
     goblin: string;
     owner: string;
     debtShare: string;
-    goblinShares: string;
+    goblinPayload: IGoblinPayload | null;
     isActive: boolean;
+    coingecko?: ICoinWithInfoAndUsdPrice[];
+    bankValues?: { reservePool: string; glbDebt: string; totalBNB: string; };
 }
 // Given a position id, it queries the bank and goblin contract to get the shares and know if it's an active position
-export async function getBankPositionWithSharesById(provider: HttpProvider, positionId: number) {
-    const bankPositionReturn = await getBankPositionById(provider, positionId);
+export async function getBankPositionContext(web3: Web3, positionId: number, atBlockN?: number, timestamp?: number | null) {
+    const bankPositionReturn = await getBankPositionById(web3, positionId, atBlockN);
     if (!bankPositionReturn) { return null; }
+    const bankValues = await syncBankValues(web3, atBlockN);
     const positionWithShares: IPositionWithShares = {
         id: positionId,
         goblin: bankPositionReturn.goblin,
         debtShare: bankPositionReturn.debtShare,
         owner: bankPositionReturn.owner,
-        goblinShares: '0',
+        goblinPayload: null,
         isActive: false,
+        bankValues,
+    };
+    const goblinPayload = await getGoblinPayload(web3, bankPositionReturn.goblin, positionId, atBlockN);
+
+    if (timestamp && goblinPayload?.lpPayload) {
+        const coinsToQuery = [
+            { address: goblinPayload.lpPayload.token0, timestamp },
+            { address: goblinPayload.lpPayload.token1, timestamp },
+        ];
+        positionWithShares.coingecko = await getCoinsInfoAndHistoryMarketData('BSC', coinsToQuery);
     }
-    const goblinShares = await getGoblinSharesById(provider, bankPositionReturn.goblin, positionId);
-    positionWithShares.goblinShares = goblinShares;
-    positionWithShares.isActive = goblinShares !== '0';
+    positionWithShares.goblinPayload = goblinPayload;
+    positionWithShares.isActive = !!goblinPayload && goblinPayload.shares !== '0';
     return positionWithShares;
 }
 
 // NOTE: get kill events only works when requesting a size of about 20k blocks each bulk, if requested more,
 // it might fail with timeout. Need to setup a strategy that sync's all events in batches.
-const MAX_BLOCKS_TO_QUERY_EACH_REQ = 8e3; // 50k
+const MAX_BLOCKS_TO_QUERY_EACH_REQ = 1e3; // 10k
 
-// This block number is taken from the first alpha token transfer from
-// https://bscscan.com/token/0xa1faa113cbe53436df28ff0aee54275c13b40975
-const MIN_BLOCK = 7042530;
+// This block number is taken from when the bank contract was deployed to bsc
+// https://bscscan.com/address/0x35cfacc93244fc94d26793cd6e68f59976380b3e
+const MIN_BLOCK = 5732773;
+const MAX_BLOCK = 0; // 8880893;
 
 type IValidEventNames = 'AddDebt' | 'Approval' | 'Kill' | 'RemoveDebt' | 'Transfer' | 'Work' | 'allEvents';
 type IBlockRange = { fromBlock: number, toBlock: number };
-type IGetEventCallback = (ed: EventData[]) => (void | Promise<void>);
+export type IGetEventCallback = (ed: EventData[]) => Promise<void>;
+export type IGetErrorCallback = (range: IBlockRange, err?: Error, ) => Promise<void>;
 export async function getEvents(
-    provider: HttpProvider,
+    web3: Web3,
     eventName: IValidEventNames,
     onGetEventCallback: IGetEventCallback,
     fromBlock: number,
     toBlock: number,
 ) {
-    const web3 = new Web3(provider);
     const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
     const eventProps: IBlockRange = { fromBlock, toBlock };
     const eventsReturned = await contract.getPastEvents(eventName, eventProps);
-    if (eventsReturned.length) { await onGetEventCallback(eventsReturned); }
+    if (eventsReturned.length) {
+        console.log(`Block range (${fromBlock} - ${toBlock}). Events: ${eventsReturned.length}`);
+        await onGetEventCallback(eventsReturned);
+    } else {
+        console.log(`Block range (${fromBlock} - ${toBlock})is empty of events.`);
+    }
 }
 
 export async function getEventsInBatches(
-    provider: HttpProvider,
+    web3: Web3,
     eventName: IValidEventNames,
     onGetEventCallback: IGetEventCallback,
+    onGetErrorCallback: IGetErrorCallback,
     fromBlock: number,
     toBlock: number | 'latest' = 'latest',
 ) {
-    const web3 = new Web3(provider);
-    const endBlock = toBlock === 'latest' ? (await web3.eth.getBlockNumber()) : toBlock;
+    let endBlock = toBlock === 'latest' ? (await web3.eth.getBlockNumber()) : toBlock;
+    if (MAX_BLOCK && endBlock > MAX_BLOCK) { 
+        endBlock = MAX_BLOCK;
+    }
     const startingBlock = fromBlock < MIN_BLOCK ? MIN_BLOCK : fromBlock
     let totalBlocks = (endBlock-startingBlock);
-    const requestErrors: IBlockRange[] = [];
+    let requestErrors = 0;
     if (totalBlocks > MAX_BLOCKS_TO_QUERY_EACH_REQ) {
         let fromBlockLoop = startingBlock;
         let toBlockLoop = startingBlock + MAX_BLOCKS_TO_QUERY_EACH_REQ;
-        while (totalBlocks > 0) {
+        while (totalBlocks) {
             totalBlocks = totalBlocks - (toBlockLoop-fromBlockLoop);
+            if (fromBlockLoop >= toBlockLoop) {
+                break;
+            }
             try {
-                await getEvents(provider, eventName, onGetEventCallback, fromBlockLoop, toBlockLoop);
+                await getEvents(web3, eventName, onGetEventCallback, fromBlockLoop, toBlockLoop);
+                fromBlockLoop = toBlockLoop + 1;
+                const nextBlockLoopEnd = fromBlockLoop + MAX_BLOCKS_TO_QUERY_EACH_REQ;
+                toBlockLoop = nextBlockLoopEnd > endBlock ? endBlock : nextBlockLoopEnd;
             } catch(e) {
-                console.error('getEventsInBatches Error!', e, fromBlockLoop, toBlockLoop);
-                requestErrors.push({ fromBlock: fromBlockLoop, toBlock: toBlockLoop });
-            } finally {
+                requestErrors++;
+                await onGetErrorCallback({ fromBlock: fromBlockLoop, toBlock: toBlockLoop }, e);
                 fromBlockLoop = toBlockLoop + 1;
                 const nextBlockLoopEnd = fromBlockLoop + MAX_BLOCKS_TO_QUERY_EACH_REQ;
                 toBlockLoop = nextBlockLoopEnd > endBlock ? endBlock : nextBlockLoopEnd;
@@ -140,10 +270,10 @@ export async function getEventsInBatches(
         return requestErrors;
     } else {
         try {
-            await getEvents(provider, eventName, onGetEventCallback, startingBlock, endBlock)
+            await getEvents(web3, eventName, onGetEventCallback, startingBlock, endBlock)
         } catch(e) {
-            requestErrors.push({ fromBlock: startingBlock, toBlock: endBlock });
-            console.error('getEventsInBatches Error!', e, startingBlock, endBlock);
+            requestErrors++;
+            await onGetErrorCallback({ fromBlock: startingBlock, toBlock: endBlock }, e);
         } finally {
             return requestErrors;
         }
