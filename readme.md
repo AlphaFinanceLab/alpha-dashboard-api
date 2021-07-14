@@ -73,3 +73,17 @@ yarn bsc:sync_events
 
 This will try to fill all the new events at the bank contract (since the last block stored at db or from the contract starting block), and fill the EventsBSC db table. While doing sync, there are many contract requests done (to Masterchef, to coingecko, to goblin contract, to lp contract, etc) that could fail, the script tries to retry the different parts, while building the object at the db. Most of the dinamic values are stored as jsonb postgres objects. Each event payload is stored at the `returnValues` table field, and the dynamic values are stored as jsonb at `contextValues`, including coingecko, lp, masterchef, gobling, etc.
 
+
+## Backup and restore db
+
+For backup (update arguments accordingly):
+```
+pg_dump --file ./backup-db-14-07-2021 --dbname=postgresql://postgres:1234@localhost:5432/alpha_finance --verbose --format=c --blobs --no-owner --section=pre-data --section=data --section=post-data --no-privileges --encoding "UTF8"
+```
+
+To restore from a dump (update settings accordingly):
+
+```
+createdb -h localhost -U postgres alpha_finance_backup
+pg_restore --dbname=postgresql://postgres:1234@localhost:5432/alpha_finance_backup --section=pre-data --section=data --section=post-data --no-owner --no-privileges --verbose "./backup-db-14-07-2021"
+```
