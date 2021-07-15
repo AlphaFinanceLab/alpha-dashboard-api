@@ -47,10 +47,17 @@ const resolvers: IResolvers = {
     //   return position;
     // },
     async bscEventByTransactionIndex(_root, args, _ctx, _info) {
+      /// Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval
+      const VALID_EVENTS = ['AddDebt', 'RemoveDebt', 'Work', 'Kill', 'Transfer', 'Approval'];
+      const typesProvided = new Set<string>(args.types);
+      if (args.types.some((t: string) => !VALID_EVENTS.includes(t))) {
+        throw new Error(`Invalid type provided. Valid types are ${VALID_EVENTS.join(',')}`);
+      }
       const ev = await prisma.eventsBSC.findMany({
         where: { AND: [
           { timestamp : { gte: args.from }},
-          { timestamp : { lte: args.to }}
+          { timestamp : { lte: args.to }},
+          { event: { in: [...typesProvided] }}
         ]},
       });
       return ev;

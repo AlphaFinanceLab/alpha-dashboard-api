@@ -124,3 +124,25 @@ sudo ufw allow 8080 ## allow port 8080
 pm2 start ecosystem.config.js # previously edit .env at the root project with db credentials
 ```
 
+
+### Example curl query:
+```
+curl -H "Content-Type:application/json" -XPOST -d '{"query": "query bscEv { bscEventByTransactionIndex(from: 1626231683, to: 1626318083, types: ['Work', 'Kill']) { logIndex returnValues event contextValues } }" }' http://35.232.17.114:8080/graphql
+```
+
+## Example altair graphql IDE with example query:
+
+```
+http://35.232.17.114:8080/altair
+```
+
+```
+query bscEv {
+  bscEventByTransactionIndex(from: 1626231683, to: 1626318083, types: ["Work", "Kill"]) {
+    logIndex
+    returnValues
+    event
+    contextValues
+  }
+}
+```
