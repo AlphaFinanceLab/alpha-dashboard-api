@@ -2,14 +2,14 @@
 scalar DateTime
 scalar Json
 
-type BSCPositionWithShares {
-  id: Int!
-  goblin: String!
-  owner: String!
-  debtShare: String!
-  isActive: Boolean!
-  updatedAt: DateTime
-}
+# type BSCPositionWithShares {
+#   id: Int!
+#   goblin: String!
+#   owner: String!
+#   debtShare: String!
+#   isActive: Boolean!
+#   updatedAt: DateTime
+# }
 
 type BSCEvent {
   logIndex: Int!
@@ -26,7 +26,7 @@ type BSCEvent {
 }
 
 type Query {
-  bscPositionById(positionId: Int!): BSCPositionWithShares
+  # bscPositionById(positionId: Int!): BSCPositionWithShares
   bscEventByTransactionIndex(from: Int!, to: Int!): [BSCEvent]
 }
 

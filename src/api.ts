@@ -3,6 +3,7 @@ import { buildSchema } from 'graphql';
 import Fastify from 'fastify'; // , { FastifyReply, FastifyRequest }
 import mercurius, { IResolvers, MercuriusLoaders } from 'mercurius';
 import mercuriusCodegen, { loadSchemaFiles } from 'mercurius-codegen';
+// import AltairFastify from 'altair-fastify-plugin';
 
 const prisma = new PrismaClient();
 export const app = Fastify({ logger: true });
@@ -39,12 +40,12 @@ const OPERATIONS_GLOB = './src/graphql/operations/*.gql';
 
 const resolvers: IResolvers = {
   Query: {
-    async bscPositionById(_root, args, _ctx, _info) {
-      const position = await prisma.positionWithSharesBSC.findFirst({
-        where: { id: args.positionId },
-      });
-      return position;
-    },
+    // async bscPositionById(_root, args, _ctx, _info) {
+    //   const position = await prisma.positionWithSharesBSC.findFirst({
+    //     where: { id: args.positionId },
+    //   });
+    //   return position;
+    // },
     async bscEventByTransactionIndex(_root, args, _ctx, _info) {
       const ev = await prisma.eventsBSC.findMany({
         where: { AND: [
@@ -69,13 +70,31 @@ const { schema } = loadSchemaFiles(SCHEMA_FILES, {
   watchOptions: {
     enabled: !IS_PRODUCTION_ENV,
     onChange(schema) {
-      app.graphql.replaceSchema(buildSchema(schema.join('\n')));
+      const bs = buildSchema(schema.join('\n'));
+      app.graphql.replaceSchema(bs);
       app.graphql.defineResolvers(resolvers);
     },
   },
 });
+
+// graphiql
+app.register(mercurius, {
+  schema, resolvers, loaders, subscription: false, graphiql: true
+});
 // context: buildContext,
-app.register(mercurius, { schema, resolvers, loaders, subscription: false, graphiql: true });
+
+
+// Altair
+// app.register(mercurius, {
+//   schema, resolvers, loaders, subscription: false, graphiql: false, ide: false, path: '/graphql'
+// });
+// app.register(AltairFastify, {
+//   path: '/altair',
+//   baseURL: '/altair/',
+//   // 'endpointURL' should be the same as the mercurius 'path'
+//   endpointURL: '/graphql'
+// })
+
 
 mercuriusCodegen(app, {
   targetPath: TARGET_PATH,
@@ -84,4 +103,4 @@ mercuriusCodegen(app, {
   codegenConfig: { scalars: { DateTime: 'Date', JSON: '{ [key: string]: any}' } },
 }).catch(console.error);
 
-app.listen(process.env.WEBAPP_PORT || 8000);
+app.listen(process.env.WEBAPP_PORT || 8080, '0.0.0.0');

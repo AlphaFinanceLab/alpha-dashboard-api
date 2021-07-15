@@ -1,0 +1,8 @@
+query bscEv {
+  bscEventByTransactionIndex(from: 1626231683, to: 1626318083) {
+    logIndex
+    returnValues
+    event
+    contextValues
+  }
+}
