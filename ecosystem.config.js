@@ -13,7 +13,7 @@ module.exports = {
         },
         {
             name: 'bsc_sync',
-            script: './build/bsc/bsc_sync_positions.js',
+            script: './build/bsc/bsc_sync_events.js',
             cron_restart: "0-59/3 * * * *", // sync every 3 mins
             autorestart: false,
             time: true,
