@@ -1,12 +1,13 @@
+require('dotenv').config();
+
 module.exports = {
     apps : [{
-      name: "app",
-      script: "./build/api.js",
+      name: 'app',
+      script: './build/api.js',
       env: {
-        NODE_ENV: "development",
+        NODE_ENV: process.env.NODE_ENV || 'development' ,
+        WEBAPP_PORT: process.env.WEBAPP_PORT || '80',
+        DATABASE_URL: process.env.DATABASE_URL,
       },
-      env_production: {
-        NODE_ENV: "production",
-      }
     }]
 }

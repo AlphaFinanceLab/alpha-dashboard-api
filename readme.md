@@ -118,6 +118,8 @@ Then install the .nvmrc version with this command from the cloned repo directory
 nvm install
 npm install --global yarn
 npm install --global pm2
+yarn install
+yarn build
 pm2 start ecosystem.config.js # previously edit .env at the root project with db credentials
 ```
 
