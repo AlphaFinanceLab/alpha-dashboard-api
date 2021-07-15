@@ -84,4 +84,4 @@ mercuriusCodegen(app, {
   codegenConfig: { scalars: { DateTime: 'Date', JSON: '{ [key: string]: any}' } },
 }).catch(console.error);
 
-app.listen(8000);
+app.listen(process.env.WEBAPP_PORT || 8000);
