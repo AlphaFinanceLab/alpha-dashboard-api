@@ -3,7 +3,7 @@ import { buildSchema } from 'graphql';
 import Fastify from 'fastify'; // , { FastifyReply, FastifyRequest }
 import mercurius, { IResolvers, MercuriusLoaders } from 'mercurius';
 import mercuriusCodegen, { loadSchemaFiles } from 'mercurius-codegen';
-// import AltairFastify from 'altair-fastify-plugin';
+import AltairFastify from 'altair-fastify-plugin';
 
 const prisma = new PrismaClient();
 export const app = Fastify({ logger: true });
@@ -78,22 +78,22 @@ const { schema } = loadSchemaFiles(SCHEMA_FILES, {
 });
 
 // graphiql
-app.register(mercurius, {
-  schema, resolvers, loaders, subscription: false, graphiql: true
-});
+// app.register(mercurius, {
+//   schema, resolvers, loaders, subscription: false, graphiql: true
+// });
 // context: buildContext,
 
 
 // Altair
-// app.register(mercurius, {
-//   schema, resolvers, loaders, subscription: false, graphiql: false, ide: false, path: '/graphql'
-// });
-// app.register(AltairFastify, {
-//   path: '/altair',
-//   baseURL: '/altair/',
-//   // 'endpointURL' should be the same as the mercurius 'path'
-//   endpointURL: '/graphql'
-// })
+app.register(mercurius, {
+  schema, resolvers, loaders, subscription: false, graphiql: false, ide: false, path: '/graphql'
+});
+app.register(AltairFastify, {
+  path: '/altair',
+  baseURL: '/altair/',
+  // 'endpointURL' should be the same as the mercurius 'path'
+  endpointURL: '/graphql'
+})
 
 
 mercuriusCodegen(app, {

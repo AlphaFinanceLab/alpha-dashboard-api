@@ -120,6 +120,7 @@ npm install --global yarn
 npm install --global pm2
 yarn install
 yarn build
+sudo ufw allow 8080 ## allow port 8080
 pm2 start ecosystem.config.js # previously edit .env at the root project with db credentials
 ```
 
