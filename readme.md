@@ -52,7 +52,7 @@ References:
 [Nvm setup](https://github.com/nvm-sh/nvm)
 [Mercurius codegen](https://github.com/mercurius-js/mercurius/blob/master/docs/typescript.md)
 
-Install yarn, nvm, nodejs, have a postgresql db, edit `.env` file. Then run:
+Install yarn, nvm, nodejs, have a postgresql db, edit `.env` file with credentials and env variables. Then run:
 ```sh
 yarn install
 npx prisma generate
@@ -87,3 +87,37 @@ To restore from a dump (update settings accordingly):
 createdb -h localhost -U postgres alpha_finance_backup
 pg_restore --dbname=postgresql://postgres:1234@localhost:5432/alpha_finance_backup --section=pre-data --section=data --section=post-data --no-owner --no-privileges --verbose "./backup-db-14-07-2021"
 ```
+
+## Prod VM access
+
+First you need the ssh private key in a file, like `~/.ssh/id_rsa_alpha_grant`
+
+Then add the private ssh key and ssh into the vm:
+```
+sudo ssh-add -K ~/.ssh/id_rsa_alpha_grant
+ssh alpha-grant-api@35.232.17.114
+```
+
+## Deploying to a new VM
+
+First ssh into the vm `ssh user@vm-ip`, then:
+```
+sudo apt-get update
+sudo apt-get -y upgrade
+sudo apt-get install postgresql-client git
+git clone https://github.com/AlphaFinanceLab/alpha-dashboard-api.git
+```
+
+Then install nvm (https://github.com/nvm-sh/nvm):
+```
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+```
+
+Then install the .nvmrc version with this command from the cloned repo directory, and then yarn:
+```
+nvm install
+npm install --global yarn
+npm install --global pm2
+pm2 start ecosystem.config.js # previously edit .env at the root project with db credentials
+```
+
