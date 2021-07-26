@@ -10,7 +10,8 @@ import {
     IPositionWithShares,
     syncBankValues,
 } from './lib/bank';
-import { getCoinsInfoAndHistoryMarketData } from '../lib/coingecko';
+import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo } from '../lib/coingecko';
+import { fillHistoricalSnapshots } from './lib/aggregation';
 
 const prisma = new PrismaClient();
 // const NODE_URL = "https://speedy-nodes-nyc.moralis.io/6df2e03496e250e048360175/bsc/mainnet";
@@ -18,6 +19,20 @@ const prisma = new PrismaClient();
 
 // NOTE: an archive node is required to query past blocks states
 const NODE_URL = "https://speedy-nodes-nyc.moralis.io/6df2e03496e250e048360175/bsc/mainnet/archive";
+
+async function retryEventErrors(
+    web3: Web3, onDone: IGetEventCallback, onError: IGetErrorCallback,
+) {
+    const eventsWithEmptyTimestamp = await prisma.eventErrorsBSC.findMany();
+    for (const evErr of eventsWithEmptyTimestamp) {
+        const getEventsBatchesWithErrors = await getEventsInBatches(
+            web3, 'allEvents', onDone, onError, evErr.startBlock, evErr.endBlock,
+        );
+        if (getEventsBatchesWithErrors !== 0) {
+            throw new Error(`[Error] There are event errors that failed retry: ${getEventsBatchesWithErrors}.`)
+        }
+    }
+}
 
 async function fillEventsTimestamps(web3: Web3) {
     const filterQuery = { where: { timestamp: { equals: null } } };
@@ -87,7 +102,9 @@ async function fillEventsContextCoingecko() {
                             { address: contextValues.goblinPayload.lpPayload.token0, timestamp: ev.timestamp },
                             { address: contextValues.goblinPayload.lpPayload.token1, timestamp: ev.timestamp },
                         ];
-                        const coingecko = await getCoinsInfoAndHistoryMarketData('BSC', coinsToQuery);
+                        const coingecko = getOnlyCoingeckoRelevantinfo(
+                            await getCoinsInfoAndHistoryMarketData('BSC', coinsToQuery)
+                        );
                         await prisma.eventsBSC.update({
                             where: {
                                 Events_logIndex_transactionHash_unique_constraint: {
@@ -328,23 +345,39 @@ async function main() {
             console.error('Error saving error!', range, e.message, e.stack)
         }
     };
-    
+    await retryEventErrors(web3, onGetEventCallback, onGetErrorCallback);
     const getEventsBatchesWithErrors = await getEventsInBatches(
         web3, 'allEvents', onGetEventCallback, onGetErrorCallback, startingBlock, blockN,
     );
+    await retryEventErrors(web3, onGetEventCallback, onGetErrorCallback);
     // now double check to fill all required data is filled in case something faileds
     await fillEventsTimestamps(web3);
     await fillEventsContexts(web3)
     await fillEventsBankValueContexts(web3);
     await fillEventsContextCoingecko();
-
-
+    
     const incompleteCount = await countIncompleteWorkOrKillEvents();
     const doneWithoutErrors = (incompleteCount === 0 && getEventsBatchesWithErrors === 0);
     if (doneWithoutErrors) {
-        console.log(`[DONE] Without errors!`);
+        console.log(`[DONE] Sync Events Without errors. Calculating periodic snapshots...`);
+        const countEventsWithoutPayload = await prisma.eventsBSC.count({ where: {
+            AND: [
+                { event: { in: ['Work', 'Kill'] } },
+                {
+                    OR: [
+                        { timestamp: { equals: null } },
+                        { contextValues: { equals: null } }
+                    ],
+                }
+            ]
+        }});
+        if (countEventsWithoutPayload) {
+            throw new Error(`Can't calculate aggregation because there are ${countEventsWithoutPayload} events without complete payload.`);
+        }
+        await fillHistoricalSnapshots();
+        console.log(`[DONE] Snapshots.`);
     } else {
-        console.error(`There are ${incompleteCount} events with missing returnValues, contextValues, positionId or timestamp!`)
+        console.error(`There are ${incompleteCount} events with missing returnValues, contextValues, positionId or timestamp!`);
         console.log(`[DONE] Errors found: ${getEventsBatchesWithErrors}`);
     }
     return doneWithoutErrors;

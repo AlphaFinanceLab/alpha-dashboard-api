@@ -7,8 +7,6 @@
     "dev": "npx nodemon",
     "clear": "rm -rf ./build",
     "build": "npx tsc --project ./tsconfig.json",
-    "bsc:sync_positions": "npx ts-node src/bsc/bsc_sync_positions.ts",
-    "bsc:sync_positions:debug": "node --inspect-brk -r ts-node/register src/bsc/bsc_sync_positions.ts",
     "bsc:sync_events": "npx ts-node src/bsc/bsc_sync_events.ts",
     "bsc:sync_events:debug": "node --inspect-brk -r ts-node/register src/bsc/bsc_sync_events.ts",
     "test": "echo \"Error: no test specified\" && exit 1"

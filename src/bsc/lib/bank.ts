@@ -1,4 +1,4 @@
-// import BigNumber from 'bignumber.js';
+import BigNumber from 'bignumber.js';
 import Web3 from 'web3';
 import { EventData } from 'web3-eth-contract';
 // import { ethers } from "ethers";
@@ -7,11 +7,114 @@ import BANK_ABI from '../abis/bank_abi.json';
 import GOBLIN_ABI from '../abis/goblin_abi.json';
 import MASTERCHEF_ABI from '../abis/masterchef_abi.json';
 import LP_TOKEN_ABI from '../abis/lp_token_abi.json';
-import { getCoinsInfoAndHistoryMarketData, ICoinWithInfoAndUsdPrice } from '../../lib/coingecko';
+import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo, ICoinWithInfoAndUsdPrice, LP_COINS } from '../../lib/coingecko';
+import { Ensure } from '../../lib/util';
+
+export type ICoinWithInfoAndUsdPriceFilled = Ensure<ICoinWithInfoAndUsdPrice, 'info' | 'marketData'>;
+export type IPositionWithSharesFilled = Ensure<IPositionWithShares, 'goblinPayload' | 'bankValues'> & { coingecko: ICoinWithInfoAndUsdPriceFilled; }
 
 export const BANK_PROXY_ADDRESS = '0x3bb5f6285c312fc7e1877244103036ebbeda193d';
 export const BANK_IMPLEMENTATION_ADDRESS = '0x35cfacc93244fc94d26793cd6e68f59976380b3e';
+// https://bscscan.com/address/0x3bb5f6285c312fc7e1877244103036ebbeda193d#readProxyContract
+export const BANK_CONTRACT_DECIMALS = 18;
+
 const EMPTY_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+export function convertToBankContractDecimals(n: BigNumber) {
+    const decimalsDivider = new BigNumber(10).pow(BANK_CONTRACT_DECIMALS);
+    return new BigNumber(n).dividedBy(decimalsDivider);
+}
+
+export function borrowInterestRate(utilization: BigNumber) {
+    if (utilization.lt(new BigNumber(0.8))) {
+        return utilization.times(new BigNumber(0.1)).div(new BigNumber(0.8))
+    }
+    if (utilization.lt(new BigNumber(0.9))) {
+        return new BigNumber(0.1);
+    }
+    return new BigNumber(0.1).plus(
+        utilization.minus(new BigNumber(0.9)).times(new BigNumber(0.4)).div(new BigNumber(0.1))
+    );
+}
+
+export function getTokensPairUsdPrice(token0: string, token1: string, cgData: IPositionWithSharesFilled['coingecko']) {
+    const coingeckoInfoToken0 = cgData.find(c => c.address === token0);
+    const coingeckoInfoToken1 = cgData.find(c => c.address === token1);
+    if (!coingeckoInfoToken0?.marketData || !coingeckoInfoToken1?.marketData) {
+        throw new Error(`No coingecko token's info!. token0: ${token0} | token1: ${token1}`);
+    }
+    const usdPriceToken0 = coingeckoInfoToken0.marketData.market_data.current_price['usd'];
+    const usdPriceToken1 = coingeckoInfoToken1.marketData.market_data.current_price['usd'];
+    if (!usdPriceToken0 || !usdPriceToken1) {
+        throw new Error(`No coingecko token's usd price!. token0: ${token0} | token1: ${token1}`);
+    }
+    return [usdPriceToken0, usdPriceToken1];
+}
+
+export function getTokenAmountsFromPosition(positionId: number, lpPayload: IGoblinLPPayload) {
+    // const lpPayload = position.goblinPayload?.lpPayload;
+    if (!lpPayload?.userInfo || !lpPayload?.reserves) {
+        throw new Error(`Position.lpPayload full info missing. This should never happen!. pid: ${positionId}`);
+    }
+    const token0 = lpPayload.token0;
+    const token1 = lpPayload.token1;
+    const goblinLpDecimalsDivider = new BigNumber(10).pow(lpPayload.decimals);
+    const goblinLpAmount = new BigNumber(lpPayload.userInfo.amount).dividedBy(goblinLpDecimalsDivider);
+    const goblinLpTotalSupply = new BigNumber(lpPayload.totalSupply).dividedBy(goblinLpDecimalsDivider);
+    const goblinLpShare = goblinLpAmount.dividedBy(goblinLpTotalSupply);
+    const token0Map = LP_COINS.find(lp => lp.address === token0);
+    const token1Map = LP_COINS.find(lp => lp.address === token1);
+    const decimalsToken0 = token0Map?.decimals || 18;
+    const decimalsToken1 = token1Map?.decimals|| 18;
+    const coingeckoIdToken0 = token0Map?.coingekoId;
+    const coingeckoIdToken1 = token1Map?.coingekoId;
+    const decimalsDividerToken0 = new BigNumber(10).pow(decimalsToken0);
+    const decimalsDividerToken1 = new BigNumber(10).pow(decimalsToken1);
+    const reservesToken0 = new BigNumber(lpPayload.reserves._reserve0).dividedBy(decimalsDividerToken0);
+    const reservesToken1 = new BigNumber(lpPayload.reserves._reserve1).dividedBy(decimalsDividerToken1);
+    const amountToken0 = reservesToken0.multipliedBy(goblinLpShare);
+    const amountToken1 = reservesToken1.multipliedBy(goblinLpShare);
+    
+    return [
+        { amount: amountToken0, coingeckoId: coingeckoIdToken0 },
+        { amount: amountToken1, coingeckoId: coingeckoIdToken1 },
+    ];
+}
+
+export function getGoblinPooledValueInfo(
+    pid: number,
+    gp: (IPositionWithSharesFilled['goblinPayload'] & { lpPayload: IGoblinLPPayload; }), 
+    coingecko: IPositionWithSharesFilled['coingecko'],
+    // token0: string,
+    // token1: string,
+) {
+    const lp = gp.lpPayload;
+    // const token0 = lpPayload.token0;
+    // const token1 = lpPayload.token1;
+    const [token0Info, token1Info] = getTokenAmountsFromPosition(pid, lp);
+    const [usdPriceToken0, usdPriceToken1] = getTokensPairUsdPrice(lp.token0, lp.token1, coingecko);
+    const usdPricePooledToken0 = token0Info.amount.multipliedBy(usdPriceToken0);
+    const usdPricePooledToken1 = token1Info.amount.multipliedBy(usdPriceToken1);
+    // goblinPayload.coingecko[0].info!.symbol
+    return {
+        lpToken: gp.lpToken,
+        usdTotalValue: usdPricePooledToken0.plus(usdPricePooledToken1),
+        token0: {
+            coingeckoId: token0Info.coingeckoId,
+            address: lp.token0,
+            amount: token0Info.amount,
+            usdPrice: usdPriceToken0,
+            usdValue: usdPricePooledToken0,
+        },
+        token1: {
+            coingeckoId: token1Info.coingeckoId,
+            address: lp.token1,
+            amount: token1Info.amount,
+            usdPrice: usdPriceToken1,
+            usdValue: usdPricePooledToken1,
+        },
+    };
+}
 
 async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
@@ -93,7 +196,7 @@ async function getBankPositionById(web3: Web3, positionId: number, atBlockN?: nu
     }
 }
 
-type IGoblinLPPayload = {
+export type IGoblinLPPayload = {
     userInfo?: {
         amount: string;
         rewardDebt: string;
@@ -133,7 +236,7 @@ async function getGoblinLPPayload(
     }
 }
 
-type IGoblinPayload = {
+export type IGoblinPayload = {
     shares: string;
     lpToken: string;
     masterChef: string;
@@ -169,7 +272,7 @@ export type IPositionWithShares = {
     debtShare: string;
     goblinPayload: IGoblinPayload | null;
     isActive: boolean;
-    coingecko?: ICoinWithInfoAndUsdPrice[];
+    coingecko?: ReturnType<typeof getOnlyCoingeckoRelevantinfo>;
     bankValues?: { reservePool: string; glbDebt: string; totalBNB: string; };
 }
 // Given a position id, it queries the bank and goblin contract to get the shares and know if it's an active position
@@ -193,7 +296,9 @@ export async function getBankPositionContext(web3: Web3, positionId: number, atB
             { address: goblinPayload.lpPayload.token0, timestamp },
             { address: goblinPayload.lpPayload.token1, timestamp },
         ];
-        positionWithShares.coingecko = await getCoinsInfoAndHistoryMarketData('BSC', coinsToQuery);
+        positionWithShares.coingecko = getOnlyCoingeckoRelevantinfo(
+            await getCoinsInfoAndHistoryMarketData('BSC', coinsToQuery)
+        );
     }
     positionWithShares.goblinPayload = goblinPayload;
     positionWithShares.isActive = !!goblinPayload && goblinPayload.shares !== '0';

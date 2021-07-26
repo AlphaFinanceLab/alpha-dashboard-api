@@ -5,7 +5,7 @@ import { formatInTimeZone } from './util';
 type ICoinGeckoCoin = {
     id: string;
     name: string;
-    platforms: {
+    platforms?: {
         [key: string]: string;
     };
     symbol: string;
@@ -68,7 +68,7 @@ async function getCoinHistoryMarketData(coinId: string, date: Date): Promise<ICo
 export async function getCoinsListBSC() {
     const coinsList = await getCoinsListWithCache();
     return coinsList.filter((c) => (
-        Object.keys(c.platforms).includes('binance-smart-chain') && c.platforms['binance-smart-chain']
+        Object.keys(c.platforms || {}).includes('binance-smart-chain') && ((c.platforms || {})['binance-smart-chain'])
     ));
 }
 
@@ -115,7 +115,7 @@ export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC', coinsToQuer
         // first get the coin info
         for (const bscCoin of bscCoins) {
             coinsToQuery.some(cq => {
-                const matches = cq.address.toLowerCase() === bscCoin.platforms['binance-smart-chain'].toLowerCase();
+                const matches = cq.address.toLowerCase() === ((bscCoin.platforms || {})['binance-smart-chain']).toLowerCase();
                 if (matches && !coinsAddressInfoMap[cq.address]) { coinsAddressInfoMap[cq.address] = bscCoin; }
                 return matches;
             });
@@ -138,4 +138,24 @@ export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC', coinsToQuer
         // then get the coin info
     }
     throw new Error(`Can't get coingecko market data for ${chain}: ${JSON.stringify(coinsToQuery)}`);
+}
+
+type ICGShortInfo = {
+    info?: { id: string; name: string; symbol: string; };
+    address: string;
+    marketData: { market_data: { current_price: { usd?: number; } }}
+};
+export function getOnlyCoingeckoRelevantinfo(coinsInfo: Array<(ICoinWithInfoAndUsdPrice | ICGShortInfo)>): ICGShortInfo[] {
+    return coinsInfo.map(cginfo => {
+        const currentUsdPrice = cginfo.marketData?.market_data.current_price['usd'];
+        return {
+            info: cginfo.info ? {
+                id: cginfo.info.id,
+                name: cginfo.info.name,
+                symbol: cginfo.info.symbol,
+            } : undefined,
+            address: cginfo.address,
+            marketData: { market_data: { current_price: { usd: currentUsdPrice } } }
+        };
+    });
 }

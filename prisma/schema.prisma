@@ -11,6 +11,12 @@ generator client {
   previewFeatures = ["filterJson"]
 }
 
+model IndicatorsBSC {
+  timestamp     Int      @id
+  indicators    Json
+  lastEvent     Json
+}
+
 model PositionWithSharesBSC {
   id            Int      @id
   goblin        String   @db.VarChar(255)

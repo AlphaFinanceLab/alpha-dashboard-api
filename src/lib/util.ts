@@ -2,6 +2,10 @@
 // import Web3 from 'web3';
 import { format, utcToZonedTime } from 'date-fns-tz';
 
+export type RequiredNotNull<T> = {[P in keyof T]: NonNullable<T[P]>};
+export type Ensure<T, K extends keyof T> = T & RequiredNotNull<Pick<T, K>>
+export type IUnwrapPromise<T> = T extends PromiseLike<infer U> ? U : T
+
 export const startOrEndOfDayUTC = (date: Date, getEndOfDay?: boolean) => {
     const ret = new Date(date);
     if (getEndOfDay) {

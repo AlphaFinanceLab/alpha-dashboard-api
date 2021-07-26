@@ -27,7 +27,8 @@ type BSCEvent {
 
 type Query {
   # bscPositionById(positionId: Int!): BSCPositionWithShares
-  bscEventByTransactionIndex(from: Int!, to: Int!, types: [String!]!): [BSCEvent]
+  bscEvents(from: Int!, to: Int!, types: [String!]!): [BSCEvent]
+  bscIndicators(from: Int!, to: Int!): [Json!]
 }
 
 # type Mutation {}

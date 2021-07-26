@@ -46,7 +46,21 @@ const resolvers: IResolvers = {
     //   });
     //   return position;
     // },
-    async bscEventByTransactionIndex(_root, args, _ctx, _info) {
+    
+    // (from: Int!, to: Int!): [Json!]
+    async bscIndicators(_root, args, _ctx, _info) {
+      const indicators = await prisma.indicatorsBSC.findMany({
+        where: {
+          AND: [
+            { timestamp: { gte: args.from } },
+            { timestamp: { lte: args.to } }
+          ]
+        },
+        take: 200,
+      });
+      return indicators;
+    },
+    async bscEvents(_root, args, _ctx, _info) {
       /// Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval
       const VALID_EVENTS = ['AddDebt', 'RemoveDebt', 'Work', 'Kill', 'Transfer', 'Approval'];
       const typesProvided = new Set<string>(args.types);
