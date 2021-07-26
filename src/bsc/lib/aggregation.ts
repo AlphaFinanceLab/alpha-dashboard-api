@@ -244,7 +244,7 @@ export async function fillHistoricalSnapshots() {
         GLOBAL_STATE = getInitialAggregationState();
     }
     for await (const eventsPage of batchedEventsAfterCurrent(paginator)) {
-        // if (!eventsPage.length) { return; }
+        if (!eventsPage.length) { continue; }
         let startOfPeriod = startOfHour(new Date(eventsPage[0].timestamp * 1000));
         let endOfPeriod = endOfHour(startOfPeriod);
         let idx = 0;
