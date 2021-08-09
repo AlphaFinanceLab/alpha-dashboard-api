@@ -17,11 +17,19 @@ const prisma = new PrismaClient();
 
 type ITokenCoingeckoInfo = { coingeckoId: string; amount: BigNumber; usdPrice: number; usdValue: BigNumber; };
 type IAggregationPoolInfo = {
-    address: string; usdTotalValue: BigNumber; token0: ITokenCoingeckoInfo; token1: ITokenCoingeckoInfo;
+    address: string;
+    usdTotalValue: BigNumber;
+    token0: ITokenCoingeckoInfo;
+    token1: ITokenCoingeckoInfo;
+    goblin: string;
 }
 type ITokenCoingeckoClonedInfo = { coingeckoId: string; amount: string; usdPrice: number; usdValue: string; };
 type IAggregationPoolClonedInfo = {
-    address: string; usdTotalValue: string; token0: ITokenCoingeckoClonedInfo; token1: ITokenCoingeckoClonedInfo;
+    address: string;
+    usdTotalValue: string;
+    token0: ITokenCoingeckoClonedInfo;
+    token1: ITokenCoingeckoClonedInfo;
+    goblin: string;
 }
 
 type IAggregationState = IUnwrapPromise<ReturnType<typeof getInitialAggregationState>>;
@@ -38,9 +46,10 @@ const getInitialAggregationState = () => ({
     bankValues: {
         totalBNB: new BigNumber(0),
         glbDebtVal: new BigNumber(0),
+        glbDebtShare: new BigNumber(0),
         reservePool: new BigNumber(0),
     },
-    EthBnb: {
+    BNB: {
         lendingValue: new BigNumber(0),
         utilizationRate: new BigNumber(0),
         lendingAPY: new BigNumber(0),
@@ -51,12 +60,6 @@ const getInitialAggregationState = () => ({
     },
     poolsInfo: ({} as { [addr: string]: IAggregationPoolInfo }),
     tvl: new BigNumber(0),
-    // pools: {
-    //     "ALPHA/ibETH": {
-    //         apy: 0,
-    //         volume: new BigNumber(0),
-    //     },
-    // },
 });
 
 const getLastAggregationStateAndCursor = async () => {
@@ -70,6 +73,7 @@ const getLastAggregationStateAndCursor = async () => {
         poolsInfo[poolKey] = {
             address: info.address,
             usdTotalValue: new BigNumber(info.usdTotalValue),
+            goblin: info.goblin,
             token0: {
                 coingeckoId: info.token0.coingeckoId,
                 usdPrice: info.token0.usdPrice,
@@ -97,12 +101,13 @@ const getLastAggregationStateAndCursor = async () => {
         bankValues: {
             totalBNB: new BigNumber(indicators.bankValues.totalBNB),
             glbDebtVal: new BigNumber(indicators.bankValues.glbDebtVal),
+            glbDebtShare: new BigNumber(indicators.bankValues.glbDebtShare),
             reservePool: new BigNumber(indicators.bankValues.reservePool),
         },
-        EthBnb: {
-            lendingValue: new BigNumber(indicators.EthBnb.lendingValue),
-            utilizationRate: new BigNumber(indicators.EthBnb.utilizationRate),
-            lendingAPY: new BigNumber(indicators.EthBnb.lendingAPY),
+        BNB: {
+            lendingValue: new BigNumber(indicators.BNB.lendingValue),
+            utilizationRate: new BigNumber(indicators.BNB.utilizationRate),
+            lendingAPY: new BigNumber(indicators.BNB.lendingAPY),
         },
         loans: {
             number: indicators.loans.number,
@@ -110,12 +115,6 @@ const getLastAggregationStateAndCursor = async () => {
         },
         tvl: new BigNumber(indicators.tvl),
         poolsInfo,
-        // pools: {
-        //     "ALPHA/ibETH": {
-        //         apy: indicators.pools['ALPHA/ibETH'].apy,
-        //         volume: new BigNumber(indicators.pools['ALPHA/ibETH'].volume),
-        //     },
-        // },
     };
     const lastEvent = (lastBlockEvent.lastEvent as ILastIndicatorEvent);
     const eventCursor: ICurrentEvent = { blockNumber: lastEvent.blockNumber, logIndex: lastEvent.logIndex };
@@ -127,6 +126,7 @@ const deepClonePoolsInfoState = (pis: IAggregationState['poolsInfo']) => {
     for (const poolInfo of Object.values(pis)) {
         poolsInfoClone[poolInfo.address] = {
             address: poolInfo.address,
+            goblin: poolInfo.goblin,
             token0: {
                 coingeckoId: poolInfo.token0.coingeckoId,
                 amount: poolInfo.token0.amount.toString(),
@@ -158,12 +158,13 @@ const deepCloneState = (s: IAggregationState) => ({
     bankValues: {
         totalBNB: s.bankValues.totalBNB.toString(), // decimals
         glbDebtVal: s.bankValues.glbDebtVal.toString(), // decimals
+        glbDebtShare: s.bankValues.glbDebtShare.toString(), // decimals
         reservePool: s.bankValues.reservePool.toString(), // decimals
     },
-    EthBnb: { // contextValues.bankValues
-        lendingValue: s.EthBnb.lendingValue.toString(), // is totalBNB // decimals
-        utilizationRate: s.EthBnb.utilizationRate.toString(), // is glbDebtVal / totalETH + reservePool // decimals
-        lendingAPY: s.EthBnb.lendingAPY.toString(), // https://alphafinancelab.gitbook.io/alpha-homora/interest-rate-model // decimals
+    BNB: { // contextValues.bankValues
+        lendingValue: s.BNB.lendingValue.toString(), // is totalBNB // decimals
+        utilizationRate: s.BNB.utilizationRate.toString(), // is glbDebtVal / totalETH + reservePool // decimals
+        lendingAPY: s.BNB.lendingAPY.toString(), // https://alphafinancelab.gitbook.io/alpha-homora/interest-rate-model // decimals
     },
     loans: {
         number: s.loans.number,
@@ -179,10 +180,10 @@ const deepCloneState = (s: IAggregationState) => ({
     // },
 });
 
-// Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval)
+// Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval)
 type ICurrentEvent = { blockNumber: number; logIndex: number; };
 type IEventsPaginator = { current?: ICurrentEvent };
-type EventsBSCFilled = Ensure<EventsBSC, 'timestamp' | 'contextValues'> & {
+type EventsBSCFilled = Ensure<EventsBSC, 'timestamp' | 'contextValues'> & {
     contextValues: IPositionWithSharesFilled;
 }
 // Generator that will paginate all events in batches
@@ -192,7 +193,7 @@ async function *batchedEventsAfterCurrent({ current }: IEventsPaginator) {
     const currentQuery = (
         { where: { AND: [
             { event: { in: ['Work', 'Kill', 'AddDebt', 'RemoveDebt'] } },
-            { blockNumber: { gte: current?.blockNumber || 0 }}
+            { blockNumber: { gte: current?.blockNumber || 0 }}
         ] }}
     );
     const eventsListCount = await prisma.eventsBSC.count(currentQuery as Parameters<typeof prisma.eventsBSC.count>[0]);
@@ -210,7 +211,6 @@ async function *batchedEventsAfterCurrent({ current }: IEventsPaginator) {
             : eventsList
         yield eventsToProcess;
     }
-    // INITIAL_AGGREGATOR_STATE
 }
 
 // const SNAPSHOTS_CACHE: {[unixTimestamp: number]: IAggregationState; } = {}
@@ -226,11 +226,8 @@ async function fillPeriodIndicators(startOfPeriod: Date, state: IAggregationStat
             create: { timestamp, indicators, lastEvent },
         });
     } catch(err) {
-        // debugger;
-        // console.error(err);
         console.error(err);
     }
-    // console.log(`Snapshot taken at ${timestamp}. Total snapshots: ${Object.keys(SNAPSHOTS_CACHE).length}`)
 }
 
 export async function fillHistoricalSnapshots() {
@@ -267,21 +264,24 @@ export async function fillHistoricalSnapshots() {
                 GLOBAL_STATE.bankValues.glbDebtVal = convertToBankContractDecimals(
                     new BigNumber(ev.contextValues.bankValues.glbDebt)
                 );
+                GLOBAL_STATE.bankValues.glbDebtShare = convertToBankContractDecimals(
+                    new BigNumber(ev.contextValues.bankValues.glbDebtShare)
+                );
                 GLOBAL_STATE.bankValues.reservePool = convertToBankContractDecimals(
                     new BigNumber(ev.contextValues.bankValues.reservePool)
                 );
                 GLOBAL_STATE.bankValues.totalBNB = convertToBankContractDecimals(
                     new BigNumber(ev.contextValues.bankValues.totalBNB)
                 );
-                GLOBAL_STATE.EthBnb.lendingValue = convertToBankContractDecimals(
+                GLOBAL_STATE.BNB.lendingValue = convertToBankContractDecimals(
                     new BigNumber(ev.contextValues.bankValues.totalBNB)
                 );
                 // * [PARTIAL] ETH/BNB Utilization rate (glbDebtVal / totalBNB + reservePool)
-                GLOBAL_STATE.EthBnb.utilizationRate = (
-                    GLOBAL_STATE.bankValues.glbDebtVal.dividedBy(GLOBAL_STATE.bankValues.totalBNB).plus(GLOBAL_STATE.bankValues.reservePool)
+                GLOBAL_STATE.BNB.utilizationRate = (
+                    GLOBAL_STATE.bankValues.glbDebtVal.dividedBy(GLOBAL_STATE.bankValues.totalBNB.plus(GLOBAL_STATE.bankValues.reservePool))
                 );
-                GLOBAL_STATE.EthBnb.lendingAPY = borrowInterestRate(GLOBAL_STATE.EthBnb.utilizationRate)
-                    .times(GLOBAL_STATE.EthBnb.utilizationRate)
+                GLOBAL_STATE.BNB.lendingAPY = borrowInterestRate(GLOBAL_STATE.BNB.utilizationRate)
+                    .times(GLOBAL_STATE.BNB.utilizationRate)
                     .times(0.9) // 10% goes to reserve
             }
             if (ev.event === 'Work') {
@@ -316,7 +316,7 @@ export async function fillHistoricalSnapshots() {
                     }
                     // * Number and value of positions refilled (Work event which id !== 0, the value is in loan argument)
                     if (positionPrevState
-                        && (positionPrevState.isActive === true || positionPrevState.isActive === false)
+                        && (positionPrevState.isActive === true || positionPrevState.isActive === false)
                         && ev.contextValues.isActive
                         && (ev.returnValues as any)?.loan
                     ) {
@@ -338,40 +338,18 @@ export async function fillHistoricalSnapshots() {
                     GLOBAL_STATE.positions.liquidated++;
                     // in Goblin contract, there will be lpToken and staking variable.
                     const goblinPayload = (positionPrevState.goblinPayload as IGoblinPayload & { lpPayload: IGoblinLPPayload; });
-                    if (!goblinPayload.lpPayload || !goblinPayload.lpPayload.userInfo || !goblinPayload.lpPayload.reserves) {
+                    if (!goblinPayload.lpPayload || !goblinPayload.lpPayload.userInfo || !goblinPayload.lpPayload.reserves) {
                         throw new Error(`Kill event without lpPayload full info should never happen!. pid: ${ev.positionId}, ${ev.transactionHash} ${ev.logIndex}`);
                     }
                     // Calculate the position usd value that is liquidated
                     const [positionToken0Info, positionToken1Info] = getTokenAmountsFromPosition(ev.positionId, goblinPayload.lpPayload);
-                    const [usdPriceToken0, usdPriceToken1] = getTokensPairUsdPrice(
+                    const [usdPriceToken0, usdPriceToken1] = getTokensPairUsdPrice(
                         goblinPayload.lpPayload.token0, goblinPayload.lpPayload.token1, ev.contextValues.coingecko
                     );
                     const usdValuePositionToken0 = positionToken0Info.amount.multipliedBy(usdPriceToken0);
                     const usdValuePositionToken1 = positionToken1Info.amount.multipliedBy(usdPriceToken1);
                     const usdValuePosition = usdValuePositionToken0.plus(usdValuePositionToken1);
-                    const valueInfo = getGoblinPooledValueInfo(
-                        ev.positionId,
-                        goblinPayload,
-                        ev.contextValues.coingecko,
-                    );
-                    // NOTE: Validate this calculation addded as liquidated value
                     GLOBAL_STATE.positions.liquidatedValue = GLOBAL_STATE.positions.liquidatedValue.plus(usdValuePosition);
-                    GLOBAL_STATE.poolsInfo[valueInfo.lpToken] = {
-                        address: valueInfo.lpToken,
-                        usdTotalValue: valueInfo.usdTotalValue,
-                        token0:  {
-                            coingeckoId: valueInfo.token0.coingeckoId || '',
-                            amount: valueInfo.token0.amount,
-                            usdPrice: valueInfo.token0.usdPrice,
-                            usdValue: valueInfo.token0.usdValue,
-                        },
-                        token1:  {
-                            coingeckoId: valueInfo.token1.coingeckoId || '',
-                            amount: valueInfo.token1.amount,
-                            usdPrice: valueInfo.token1.usdPrice,
-                            usdValue: valueInfo.token1.usdValue,
-                        }
-                    };
                 } else {
                     throw new Error(`Kill event without positionId should never happen!. pid: ${ev.positionId}, ${ev.transactionHash} ${ev.logIndex}`);
                 }
@@ -380,11 +358,23 @@ export async function fillHistoricalSnapshots() {
                 if (!((ev.returnValues as any).debtShare)) {
                     throw new Error('Invalid addDebt with no debt share value');
                 }
+                /*
+                NOTE!: from the contract, this is how share to val is calculated:
+                    /// @dev Return the BNB debt value given the debt share. Be careful of unaccrued interests.
+                    /// @param debtShare The debt share to be converted.
+                    function debtShareToVal(uint debtShare) public view returns (uint) {
+                        if (glbDebtShare == 0) return debtShare; // When there's no share, 1 share = 1 val.
+                        return debtShare.mul(glbDebtVal).div(glbDebtShare);
+                    }
+                */
+                // TODO: validate that the conversion is ok
                 const returnDebtShare = convertToBankContractDecimals(
                     new BigNumber((ev.returnValues as any).debtShare)
                 );
-                // TODO: validate that the value is from the debt share
-                GLOBAL_STATE.loans.value = (GLOBAL_STATE.loans.value.plus(returnDebtShare));
+                const debShareValue = GLOBAL_STATE.bankValues.glbDebtShare.isEqualTo(new BigNumber(0))
+                    ? returnDebtShare
+                    : returnDebtShare.multipliedBy(GLOBAL_STATE.bankValues.glbDebtVal).dividedBy(GLOBAL_STATE.bankValues.glbDebtShare);
+                GLOBAL_STATE.loans.value = (GLOBAL_STATE.loans.value.plus(debShareValue));
             } else if (ev.event === 'RemoveDebt') {
                 const returnDebtShare = convertToBankContractDecimals(
                     new BigNumber((ev.returnValues as any).debtShare)
@@ -403,14 +393,15 @@ export async function fillHistoricalSnapshots() {
                 GLOBAL_STATE.poolsInfo[valueInfo.lpToken] = {
                     address: valueInfo.lpToken,
                     usdTotalValue: valueInfo.usdTotalValue,
+                    goblin: ev.contextValues.goblin, // the goblin address
                     token0:  {
-                        coingeckoId: valueInfo.token0.coingeckoId || '',
+                        coingeckoId: valueInfo.token0.coingeckoId || '',
                         amount: valueInfo.token0.amount,
                         usdPrice: valueInfo.token0.usdPrice,
                         usdValue: valueInfo.token0.usdValue,
                     },
                     token1:  {
-                        coingeckoId: valueInfo.token1.coingeckoId || '',
+                        coingeckoId: valueInfo.token1.coingeckoId || '',
                         amount: valueInfo.token1.amount,
                         usdPrice: valueInfo.token1.usdPrice,
                         usdValue: valueInfo.token1.usdValue,
@@ -428,40 +419,5 @@ export async function fillHistoricalSnapshots() {
             }
             idx++;
         }
-        // if (eventsPage.length) { // NOTE: recursively fill next page if available
-        //     console.log(`Trying to fill next page of items`);
-        //     await fillHistoricalSnapshots();
-        // }
     }
 }
-
-/*
-const NODE_URL = "https://speedy-nodes-nyc.moralis.io/6df2e03496e250e048360175/bsc/mainnet";
-
-async function main() {
-    const web3HttpProvider = new Web3.providers.HttpProvider(NODE_URL, { keepAlive: true, timeout: 0, });
-    let web3 = new Web3(web3HttpProvider);
-    web3.eth.transactionBlockTimeout = 0;
-    web3.eth.transactionPollingTimeout = 0;
-    const blockNumber = await web3.eth.getBlockNumber();
-    const countEventsWithoutPayload = await prisma.eventsBSC.count({ where: {
-        AND: [
-            { event: { in: ['Work', 'Kill'] } },
-            {
-                OR: [
-                    { timestamp: { equals: null } },
-                    { contextValues: { equals: null } }
-                ],
-            }
-        ]
-    }});
-    if (countEventsWithoutPayload) {
-        throw new Error(`Can't calculate aggregation because there are ${countEventsWithoutPayload} events without complete payload.`);
-    }
-    await fillHistoricalSnapshots();
-    return { blockNumber };
-}
-
-main().then(res => console.log(res));
-
-*/

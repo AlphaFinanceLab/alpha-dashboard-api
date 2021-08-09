@@ -10,8 +10,8 @@ import LP_TOKEN_ABI from '../abis/lp_token_abi.json';
 import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo, ICoinWithInfoAndUsdPrice, LP_COINS } from '../../lib/coingecko';
 import { Ensure } from '../../lib/util';
 
-export type ICoinWithInfoAndUsdPriceFilled = Ensure<ICoinWithInfoAndUsdPrice, 'info' | 'marketData'>;
-export type IPositionWithSharesFilled = Ensure<IPositionWithShares, 'goblinPayload' | 'bankValues'> & { coingecko: ICoinWithInfoAndUsdPriceFilled; }
+export type ICoinWithInfoAndUsdPriceFilled = Ensure<ICoinWithInfoAndUsdPrice, 'info' | 'marketData'>;
+export type IPositionWithSharesFilled = Ensure<IPositionWithShares, 'goblinPayload' | 'bankValues'> & { coingecko: ICoinWithInfoAndUsdPriceFilled; }
 
 export const BANK_PROXY_ADDRESS = '0x3bb5f6285c312fc7e1877244103036ebbeda193d';
 export const BANK_IMPLEMENTATION_ADDRESS = '0x35cfacc93244fc94d26793cd6e68f59976380b3e';
@@ -21,8 +21,7 @@ export const BANK_CONTRACT_DECIMALS = 18;
 const EMPTY_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export function convertToBankContractDecimals(n: BigNumber) {
-    const decimalsDivider = new BigNumber(10).pow(BANK_CONTRACT_DECIMALS);
-    return new BigNumber(n).dividedBy(decimalsDivider);
+    return new BigNumber(n).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`);
 }
 
 export function borrowInterestRate(utilization: BigNumber) {
@@ -40,20 +39,20 @@ export function borrowInterestRate(utilization: BigNumber) {
 export function getTokensPairUsdPrice(token0: string, token1: string, cgData: IPositionWithSharesFilled['coingecko']) {
     const coingeckoInfoToken0 = cgData.find(c => c.address === token0);
     const coingeckoInfoToken1 = cgData.find(c => c.address === token1);
-    if (!coingeckoInfoToken0?.marketData || !coingeckoInfoToken1?.marketData) {
-        throw new Error(`No coingecko token's info!. token0: ${token0} | token1: ${token1}`);
+    if (!coingeckoInfoToken0?.marketData || !coingeckoInfoToken1?.marketData) {
+        throw new Error(`No coingecko token's info!. token0: ${token0} | token1: ${token1}`);
     }
     const usdPriceToken0 = coingeckoInfoToken0.marketData.market_data.current_price['usd'];
     const usdPriceToken1 = coingeckoInfoToken1.marketData.market_data.current_price['usd'];
-    if (!usdPriceToken0 || !usdPriceToken1) {
-        throw new Error(`No coingecko token's usd price!. token0: ${token0} | token1: ${token1}`);
+    if (!usdPriceToken0 || !usdPriceToken1) {
+        throw new Error(`No coingecko token's usd price!. token0: ${token0} | token1: ${token1}`);
     }
     return [usdPriceToken0, usdPriceToken1];
 }
 
 export function getTokenAmountsFromPosition(positionId: number, lpPayload: IGoblinLPPayload) {
     // const lpPayload = position.goblinPayload?.lpPayload;
-    if (!lpPayload?.userInfo || !lpPayload?.reserves) {
+    if (!lpPayload?.userInfo || !lpPayload?.reserves) {
         throw new Error(`Position.lpPayload full info missing. This should never happen!. pid: ${positionId}`);
     }
     const token0 = lpPayload.token0;
@@ -64,8 +63,8 @@ export function getTokenAmountsFromPosition(positionId: number, lpPayload: IGobl
     const goblinLpShare = goblinLpAmount.dividedBy(goblinLpTotalSupply);
     const token0Map = LP_COINS.find(lp => lp.address === token0);
     const token1Map = LP_COINS.find(lp => lp.address === token1);
-    const decimalsToken0 = token0Map?.decimals || 18;
-    const decimalsToken1 = token1Map?.decimals|| 18;
+    const decimalsToken0 = token0Map?.decimals || 18;
+    const decimalsToken1 = token1Map?.decimals|| 18;
     const coingeckoIdToken0 = token0Map?.coingekoId;
     const coingeckoIdToken1 = token1Map?.coingekoId;
     const decimalsDividerToken0 = new BigNumber(10).pow(decimalsToken0);
@@ -92,7 +91,7 @@ export function getGoblinPooledValueInfo(
     // const token0 = lpPayload.token0;
     // const token1 = lpPayload.token1;
     const [token0Info, token1Info] = getTokenAmountsFromPosition(pid, lp);
-    const [usdPriceToken0, usdPriceToken1] = getTokensPairUsdPrice(lp.token0, lp.token1, coingecko);
+    const [usdPriceToken0, usdPriceToken1] = getTokensPairUsdPrice(lp.token0, lp.token1, coingecko);
     const usdPricePooledToken0 = token0Info.amount.multipliedBy(usdPriceToken0);
     const usdPricePooledToken1 = token1Info.amount.multipliedBy(usdPriceToken1);
     // goblinPayload.coingecko[0].info!.symbol
@@ -116,7 +115,7 @@ export function getGoblinPooledValueInfo(
     };
 }
 
-async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | null> {
+async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const reservePool: string = await contract.methods.reservePool().call({}, atBlockN);
@@ -127,7 +126,7 @@ async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | 
     }
 }
 
-async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | null> {
+async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const glbDebtVal: string = await contract.methods.glbDebtVal().call({}, atBlockN);
@@ -138,7 +137,18 @@ async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | n
     }
 }
 
-async function getTotalBNB(web3: Web3, atBlockN?: number): Promise<string | null> {
+async function getGlbDebtShare(web3: Web3, atBlockN?: number): Promise<string | null> {
+    try {
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const glbDebtVal: string = await contract.methods.glbDebtShare().call({}, atBlockN);
+        return glbDebtVal;
+    } catch (err) {
+        console.error(`[ERROR getGlbDebtShare] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
+        return null;
+    }
+}
+
+async function getTotalBNB(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const totalBNB: string = await contract.methods.totalBNB().call({}, atBlockN);
@@ -153,11 +163,12 @@ export async function syncBankValues(web3: Web3, atBlockN?: number) {
     try {
         const reservePool = await getReservePool(web3, atBlockN);
         const glbDebt = await getGlbDebtVal(web3, atBlockN);
+        const glbDebtShare = await getGlbDebtShare(web3, atBlockN);
         const totalBNB = await getTotalBNB(web3, atBlockN);
-        if (!reservePool || !glbDebt || !totalBNB) {
-            throw new Error(`Invalid sync values ${JSON.stringify({ reservePool, glbDebt, totalBNB, atBlockN })}`);
+        if (!reservePool || !glbDebt || !glbDebtShare || !totalBNB) {
+            throw new Error(`Invalid sync values ${JSON.stringify({ reservePool, glbDebt, glbDebtShare, totalBNB, atBlockN })}`);
         }
-        return { reservePool, glbDebt, totalBNB };
+        return { reservePool, glbDebt, glbDebtShare, totalBNB };
     } catch (err) {
         console.error(`[ERROR syncBankValues] ${JSON.stringify({ msg: err.message, stack: err.stack }, null, 2)}`)
         return;
@@ -165,7 +176,7 @@ export async function syncBankValues(web3: Web3, atBlockN?: number) {
 }
 
 // Queries the next position id from the bank contract
-export async function getBankNextPositionId(web3: Web3, atBlockN?: number): Promise<string | null> {
+export async function getBankNextPositionId(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const nextPositionID: string = await contract.methods.nextPositionID().call({}, atBlockN);
@@ -182,11 +193,11 @@ type IBankPosition = {
     debtShare: string; // uint256
 }
 // Given a position id, it queries the bank contract for the goblin, owner and debtShare properties
-async function getBankPositionById(web3: Web3, positionId: number, atBlockN?: number): Promise<IBankPosition | null> {
+async function getBankPositionById(web3: Web3, positionId: number, atBlockN?: number): Promise<IBankPosition | null> {
     try {
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const position: IBankPosition = await contract.methods.positions(positionId).call({}, atBlockN);
-        if (position.goblin === EMPTY_ADDRESS || position.owner === EMPTY_ADDRESS) {
+        if (position.goblin === EMPTY_ADDRESS || position.owner === EMPTY_ADDRESS) {
             return null
         }
         return position;
@@ -205,7 +216,7 @@ export type IGoblinLPPayload = {
         _blockTimestampLast: string;
         _reserve0: string;
         _reserve1: string;
-    } | null;
+    } | null;
     totalSupply: string;
     decimals: string;
     token0: string;
@@ -219,7 +230,7 @@ async function getGoblinLPPayload(
     goblinPID: string,
     globlinAddr: string,
     atBlockN?: number,
-): Promise<IGoblinLPPayload | null> {
+): Promise<IGoblinLPPayload | null> {
     try {
         const contractMC = new web3.eth.Contract((MASTERCHEF_ABI as unknown) as AbiItem, masterChef);
         const userInfo: IGoblinLPPayload['userInfo'] = await contractMC.methods.userInfo(goblinPID, globlinAddr).call({}, atBlockN);
@@ -241,7 +252,7 @@ export type IGoblinPayload = {
     lpToken: string;
     masterChef: string;
     pid: string;
-    lpPayload?: IGoblinLPPayload | null;
+    lpPayload?: IGoblinLPPayload | null;
 };
 
 // Given a position id, it queries goblin contract to get it's shares property
@@ -250,7 +261,7 @@ async function getGoblinPayload(
     goblinAddr: string,
     positionId: number,
     atBlockN?: number,
-): Promise<IGoblinPayload | null> {
+): Promise<IGoblinPayload | null> {
     try {
         const contract = new web3.eth.Contract((GOBLIN_ABI as unknown) as AbiItem, goblinAddr);
         const shares: string = await contract.methods.shares(positionId).call({}, atBlockN);
@@ -273,10 +284,10 @@ export type IPositionWithShares = {
     goblinPayload: IGoblinPayload | null;
     isActive: boolean;
     coingecko?: ReturnType<typeof getOnlyCoingeckoRelevantinfo>;
-    bankValues?: { reservePool: string; glbDebt: string; totalBNB: string; };
+    bankValues?: { reservePool: string; glbDebt: string; glbDebtShare: string; totalBNB: string; };
 }
 // Given a position id, it queries the bank and goblin contract to get the shares and know if it's an active position
-export async function getBankPositionContext(web3: Web3, positionId: number, atBlockN?: number, timestamp?: number | null) {
+export async function getBankPositionContext(web3: Web3, positionId: number, atBlockN?: number, timestamp?: number | null) {
     const bankPositionReturn = await getBankPositionById(web3, positionId, atBlockN);
     if (!bankPositionReturn) { return null; }
     const bankValues = await syncBankValues(web3, atBlockN);
@@ -356,7 +367,7 @@ export async function getEventsInBatches(
         let toBlockLoop = startingBlock + MAX_BLOCKS_TO_QUERY_EACH_REQ;
         while (totalBlocks) {
             totalBlocks = totalBlocks - (toBlockLoop-fromBlockLoop);
-            if (fromBlockLoop >= toBlockLoop) {
+            if (fromBlockLoop >= toBlockLoop) {
                 break;
             }
             try {
