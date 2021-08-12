@@ -1,37 +1,30 @@
 {
-    "exclude": [
-      "build",
-      "node_modules",
-      "src/**/__test__"
+  "exclude": [
+    "build",
+    "node_modules",
+    "src/**/__test__"
+  ],
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
     ],
-    "include": [
-        "src/modules.d.ts",
-        "src/**/*.ts",
-        "src/index.ts"
-    ],
-    "compilerOptions": {
-      "target": "es6",
-      "module": "commonjs",
-      "moduleResolution": "node",
-      "lib": [
-        "esnext",
-        "dom",
-        "dom.iterable"
-      ],
-      "outDir": "build",
-      "baseUrl": "./",
-      "allowJs": false,
-      "allowSyntheticDefaultImports": true,
-      "declaration": true,
-      "esModuleInterop": true,
-      "isolatedModules": false,
-      "jsx": "react",
-      "noEmit": false,
-      "noUnusedLocals": true,
-      "noUnusedParameters": true,
-      "resolveJsonModule": true,
-      "skipLibCheck": true,
-      "sourceMap": true,
-      "strict": true
-    }
+    "allowJs": false,
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "esModuleInterop": true,
+    "isolatedModules": false,
+    "jsx": "preserve",
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true
+  }
 }

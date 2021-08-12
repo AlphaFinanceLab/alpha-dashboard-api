@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["filterJson"]
+}
+
+model IndicatorsBSC {
+  timestamp     Int      @id
+  indicators    Json
+  lastEvent     Json
+}
+
+model PositionWithSharesBSC {
+  id            Int      @id
+  goblin        String   @db.VarChar(255)
+  owner         String   @db.VarChar(255)
+  debtShare     String   @db.VarChar(255)
+  goblinPayload Json?
+  isActive      Boolean  @default(false)
+  updatedAt     DateTime @default(now())
+}
+
+model EventsBSC {
+  logIndex Int
+  transactionHash String   @db.VarChar(255)
+  transactionIndex Int
+  address          String   @db.VarChar(255)
+  blockNumber      Int
+
+  /// Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval
+  event            String   @db.VarChar(255)
+
+  /// Values emited with the event
+  returnValues     Json?
+
+  /// Event context related values, e.g.: Get the goblin contract shares value at the given event block time
+  contextValues    Json?
+
+  /// Id of the position if the event references a position id
+  positionId       Int?
+
+  /// The event block timestamp (should not be null but could be null if something fails while querying web3)
+  timestamp        Int?
+
+  updatedAt        DateTime @default(now())
+  @@unique([logIndex, transactionHash], name: "Events_logIndex_transactionHash_unique_constraint")
+}
+
+model EventErrorsBSC {
+  id         String  @id
+  startBlock Int
+  endBlock   Int
+  retries    Int      @default(0)
+  updatedAt  DateTime @default(now())
+}

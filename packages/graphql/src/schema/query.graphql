@@ -1,0 +1,7 @@
+type Query {
+  # bscPositionById(positionId: Int!): BSCPositionWithShares
+  bscEvents(from: Int!, to: Int!, types: [String!]!): [BSCEvent]
+  bscIndicators(from: Int!, to: Int!): [JSON!]
+}
+
+# type Mutation {}

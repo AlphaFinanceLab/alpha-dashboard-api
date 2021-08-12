@@ -1,0 +1,23 @@
+{
+    "extends": "../../tsconfig.json",
+    "include": [
+      "src/modules.d.ts",
+      "src/**/*.ts",
+      "src/index.ts"
+    ],
+    "exclude": [
+      "build",
+      "node_modules",
+      "src/**/__test__"
+    ],
+    "compilerOptions": {
+      "declaration": false,
+      "isolatedModules": false,
+      "outDir": "build",
+      "target": "es6",
+      "module": "commonjs",
+      "jsx": "preserve",
+      "baseUrl": "./",
+      "noEmit": true
+    }
+  }

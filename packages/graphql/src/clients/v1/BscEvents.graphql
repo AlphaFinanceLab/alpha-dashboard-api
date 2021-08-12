@@ -1,0 +1,15 @@
+query bscEv {
+  bscEvents(from: 1626231683, to: 1626318083, types: ["Work", "Kill"]) {
+    logIndex
+    transactionHash
+    transactionIndex
+    address
+    blockNumber
+    event
+    returnValues
+    contextValues
+    positionId
+    timestamp
+    updatedAt
+  }
+}

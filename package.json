@@ -1,50 +1,34 @@
 {
-  "name": "alpha-dashboard-api",
+  "name": "alphadashboard",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "private": true,
   "scripts": {
-    "dev": "npx nodemon",
-    "clear": "rm -rf ./build",
-    "build": "npx tsc --project ./tsconfig.json",
-    "bsc:sync_events": "npx ts-node src/bsc/bsc_sync_events.ts",
-    "bsc:sync_events:debug": "node --inspect-brk -r ts-node/register src/bsc/bsc_sync_events.ts",
+    "cleanup:cache:packages": "rm -rf node_modules/.cache && rm -rf ./packages/**/node_modules/.cache",
+    "cleanup:packages": "rm -rf node_modules/@alphadashboard && rm -rf ./packages/**/node_modules/@alphadashboard",
+    "cleanup:all": "rm -rf node_modules && rm -rf ./packages/**/node_modules",
+    "build:graphql": "yarn workspace @alphadashboard/graphql run build",
+    "build:server": "yarn workspace @alphadashboard/server run build",
+    "build": "yarn build:graphql && yarn build:server",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AlphaFinanceLab/alpha-dashboard-api.git"
+    "url": ""
   },
   "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/AlphaFinanceLab/alpha-dashboard-api/issues"
-  },
-  "homepage": "https://github.com/AlphaFinanceLab/alpha-dashboard-api#readme",
-  "prisma": {
-    "schema": "prisma/schema.prisma"
-  },
   "dependencies": {
-    "@prisma/client": "2.27.0",
-    "altair-fastify-plugin": "4.0.7",
-    "axios": "0.21.1",
-    "bignumber.js": "9.0.1",
-    "date-fns": "2.22.1",
-    "date-fns-tz": "1.1.4",
-    "dotenv": "10.0.0",
-    "ethereum-block-by-date": "1.4.0",
-    "ethers": "5.4.1",
-    "fastify": "3.19.1",
-    "graphql": "15.5.1",
-    "mercurius": "8.0.0",
-    "mercurius-codegen": "1.7.0",
-    "nodemon": "2.0.12",
-    "prisma": "2.27.0",
-    "typescript": "4.3.5",
-    "web3": "1.4.0"
+    "typescript": "4.3.5"
   },
   "devDependencies": {
-    "@types/node": "16.3.2",
+    "@types/node": "16.4.7",
     "ts-node": "10.1.0"
+  },
+  "workspaces": {
+    "packages": [
+        "packages/*"
+    ]
   }
 }

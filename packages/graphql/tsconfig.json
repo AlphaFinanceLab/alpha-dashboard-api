@@ -1,0 +1,15 @@
+{
+    "extends": "../../tsconfig.json",
+    "include": ["ts/**/*.ts"],
+    "exclude": [
+      "src",
+      "node_modules"
+    ],
+    "compilerOptions": {
+      "noEmit": false,
+      "target": "es5",
+      "module": "commonjs",
+      "outDir": "build",
+      "jsx": "preserve"
+    }
+  }

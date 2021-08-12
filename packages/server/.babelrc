@@ -1,0 +1,21 @@
+{
+    "plugins": [
+      "@babel/plugin-transform-runtime",
+      "@babel/plugin-proposal-class-properties"
+    ],
+    "ignore": [
+      "**/__test__",
+      "**/*.spec.ts"
+    ],
+    "presets": [
+      [
+        "@babel/preset-env",
+        {
+          "targets": {
+            "node": "12"
+          }
+        }
+      ],
+      "@babel/typescript"
+    ]
+  }
