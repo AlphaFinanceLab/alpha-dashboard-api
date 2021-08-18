@@ -71,8 +71,15 @@ export async function getCoinsListBSC() {
     ));
 }
 
+export async function getCoinsListETH() {
+    const coinsList = await getCoinsListWithCache();
+    return coinsList.filter((c) => (
+        Object.keys(c.platforms || {}).includes('ethereum') && ((c.platforms || {})['ethereum'])
+    ));
+}
+
 // Some coins address from BSC are not listed at coingecko, maps those absent with a coingecko id
-export const LP_COINS = [
+export const LP_COINS_BSC = [
     { address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82', coingekoId: 'pancakeswap-token', decimals: 18 },
     { address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', coingekoId: 'wbnb', decimals: 18 },
     { address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', coingekoId: 'binance-usd', decimals: 18 },
@@ -92,12 +99,47 @@ export const LP_COINS = [
     //       historical data, for now using 'polkadot' manual map instead, to show historical data.
     { address: '0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402', coingekoId: 'polkadot', decimals: 18 },
 ];
-
 const BSC_MAP_COINS_ADDR_TO_ID: { [addr: string]: string; } = {};
-LP_COINS.forEach(c => BSC_MAP_COINS_ADDR_TO_ID[c.address] = c.coingekoId);
+LP_COINS_BSC.forEach(c => BSC_MAP_COINS_ADDR_TO_ID[c.address] = c.coingekoId);
+
+export const LP_COINS_ETH = [
+    { address: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599', coingekoId: 'wrapped-bitcoin', decimals: 8 },
+    { address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', coingekoId: 'usd-coin', decimals: 6 },
+    { address: '0xdac17f958d2ee523a2206206994597c13d831ec7', coingekoId: 'tether', decimals: 6 },
+    { address: '0x6b175474e89094c44da98b954eedeac495271d0f', coingekoId: 'dai', decimals: 18 },
+    { address: '0x1494ca1f11d487c2bbe4543e90080aeba4ba3c2b', coingekoId: 'defipulse-index', decimals: 18 },
+    { address: '0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e', coingekoId: 'yearn-finance', decimals: 18 },
+    { address: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', coingekoId: 'uniswap', decimals: 18 },
+    { address: '0x514910771af9ca656af840dff83e8264ecf986ca', coingekoId: 'chainlink', decimals: 18 },
+    { address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9', coingekoId: 'aave', decimals: 18 },
+    { address: '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2', coingekoId: 'maker', decimals: 18 },
+    { address: '0xeb4c2781e4eba804ce9a9803c67d0893436bb27d', coingekoId: 'renbtc', decimals: 8 },
+    { address: '0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f', coingekoId: 'havven', decimals: 18 },
+    { address: '0x1ceb5cb57c4d4e2b2433641b95dd330a33185a44', coingekoId: 'keep3rv1', decimals: 18 },
+    { address: '0xb753428af26e81097e7fd17f40c88aaa3e04902c', coingekoId: 'saffron-finance', decimals: 18 },
+    { address: '0xbc396689893d065f41bc2c6ecbee5e0085233447', coingekoId: 'perpetual-protocol', decimals: 18 },
+    { address: '0xc00e94cb662c3520282e6f5717214004a7f26888', coingekoId: 'compound-governance-token', decimals: 18 },
+    { address: '0xd533a949740bb3306d119cc777fa900ba034cd52', coingekoId: 'curve-dao-token', decimals: 18 },
+    { address: '0x967da4048cd07ab37855c090aaf366e4ce1b9f48', coingekoId: 'ocean-protocol', decimals: 18 },
+    { address: '0x6b3595068778dd592e39a122f4f5a5cf09c90fe2', coingekoId: 'sushi', decimals: 18 },
+    { address: '0x429881672B9AE42b8EbA0E26cD9C73711b891Ca5', coingekoId: 'pickle-finance', decimals: 18 },
+    { address: '0xa3bed4e1c75d00fa6f4e5e6922db7261b5e9acd2', coingekoId: 'meta', decimals: 18 },
+    { address: '0xba11d00c5f74255f56a5e366f4f77f5a186d7f55', coingekoId: 'band-protocol', decimals: 18 },
+    { address: '0x57ab1ec28d129707052df4df418d58a2d46d5f51', coingekoId: 'nusd', decimals: 18 },
+    { address: '0x04fa0d235c4abf4bcf4787af4cf447de572ef828', coingekoId: 'uma', decimals: 18 },
+    { address: '0x0aacfbec6a24756c20d41914f2caba817c0d8521', coingekoId: 'yam-2', decimals: 18 },
+    { address: '0x408e41876cccdc0f92210600ef50372656052a38', coingekoId: 'republic-protocol', decimals: 18 },
+    { address: '0xc944e90c64b2c07662a292be6244bdf05cda44a7', coingekoId: 'the-graph', decimals: 18 },
+    { address: '0x3c9d6c1c73b31c837832c72e04d3152f051fc1a9', coingekoId: 'boringdao-[old]', decimals: 18 },
+    { address: '0x8064d9ae6cdf087b1bcd5bdf3531bd5d8c537a68', coingekoId: 'boringdao-btc', decimals: 18 },
+    { address: '0xa1faa113cbe53436df28ff0aee54275c13b40975', coingekoId: 'alpha-finance', decimals: 18 },
+];
+const ETH_MAP_COINS_ADDR_TO_ID: { [addr: string]: string; } = {};
+LP_COINS_ETH.forEach(c => ETH_MAP_COINS_ADDR_TO_ID[c.address] = c.coingekoId);
+
 type ICoinToQuery = { address: string; timestamp: number; }
 export type ICoinWithInfoAndUsdPrice = ICoinToQuery & { info: ICoinGeckoCoin | null; marketData: ICoinMarketData | undefined; };
-export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC', coinsToQuery: ICoinToQuery[]) {
+export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC' | 'ETH', coinsToQuery: ICoinToQuery[]) {
     const allCoins = await getCoinsListWithCache();
     if (chain === 'BSC') {
         const bscCoins = await getCoinsListBSC();
@@ -134,7 +176,47 @@ export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC', coinsToQuer
             }
         }
         return ret;
-        // then get the coin info
+    } else if (chain === 'ETH') {
+        const ethCoins = await getCoinsListETH();
+        const coinsAddressInfoMap: { [addr: string]: ICoinGeckoCoin } = {};
+        // in cases where there are coins bsc address that coingecko is not updated with their address, use the custom map
+        for (const cq of coinsToQuery) {
+            if (ETH_MAP_COINS_ADDR_TO_ID[cq.address]) {
+                const coinInfo = allCoins.find(c => c.id === ETH_MAP_COINS_ADDR_TO_ID[cq.address]);
+                if (coinInfo) {
+                    coinsAddressInfoMap[cq.address] = coinInfo;
+                } else {
+                    console.error(`Can't get coingecko info for ${chain}: ${JSON.stringify(cq)}.`);
+                }
+            }
+        }
+        // first get the coin info
+        for (const ethCoin of ethCoins) {
+            coinsToQuery.some(cq => {
+                const matches = cq.address.toLowerCase() === ((ethCoin.platforms || {})['ethereum']).toLowerCase();
+                if (matches && !coinsAddressInfoMap[cq.address]) {
+                    coinsAddressInfoMap[cq.address] = ethCoin;
+                } else if (!matches) {
+                    console.error(`Can't get coingecko info for ${chain}: ${JSON.stringify(cq)}.`);
+                }
+                return matches;
+            });
+        }
+        const ret: ICoinWithInfoAndUsdPrice[] = [];
+        for (const coin of coinsToQuery) {
+            const info: ICoinGeckoCoin | undefined = coinsAddressInfoMap[coin.address];
+            if (info) {
+                const marketData = await getCoinHistoryMarketData(info.id, new Date(coin.timestamp*1000));
+                if (marketData) {
+                    ret.push({ ...coin, info, marketData });
+                } else {
+                    throw new Error(`Can't get coingecko market data for ${chain}: ${JSON.stringify(coin)}.`);    
+                }
+            } else {
+                throw new Error(`Can't get coingecko info for ${chain}: ${JSON.stringify(coin)}.`);
+            }
+        }
+        return ret;
     }
     throw new Error(`Can't get coingecko market data for ${chain}: ${JSON.stringify(coinsToQuery)}`);
 }

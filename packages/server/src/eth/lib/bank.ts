@@ -4,18 +4,21 @@ import { EventData } from 'web3-eth-contract';
 // import { ethers } from "ethers";
 import { AbiItem } from 'web3-utils';
 import BANK_ABI from '../abis/bank_abi.json';
-import GOBLIN_ABI from '../abis/goblin_abi.json';
+import GOBLIN_UNI_ABI from '../abis/goblin_uni_abi.json';
+import GOBLIN_SUSHI_ABI from '../abis/goblin_sushi_abi.json';
+import STAKING_ABI from '../abis/staking_rewards_abi.json';
 import MASTERCHEF_ABI from '../abis/masterchef_abi.json';
 import LP_TOKEN_ABI from '../abis/lp_token_abi.json';
-import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo, ICoinWithInfoAndUsdPrice, LP_COINS_BSC } from '../../lib/coingecko';
+import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo, ICoinWithInfoAndUsdPrice, LP_COINS_ETH } from '../../lib/coingecko';
 import { Ensure } from '../../lib/util';
+import { getGoblinAddressPoolMap, ExchangeNames } from './contractsMap';
 
 export type ICoinWithInfoAndUsdPriceFilled = Ensure<ICoinWithInfoAndUsdPrice, 'info' | 'marketData'>;
 export type IPositionWithSharesFilled = Ensure<IPositionWithShares, 'goblinPayload' | 'bankValues'> & { coingecko: ICoinWithInfoAndUsdPriceFilled; }
 
-export const BANK_PROXY_ADDRESS = '0x3bb5f6285c312fc7e1877244103036ebbeda193d';
-export const BANK_IMPLEMENTATION_ADDRESS = '0x35cfacc93244fc94d26793cd6e68f59976380b3e';
-// https://bscscan.com/address/0x3bb5f6285c312fc7e1877244103036ebbeda193d#readProxyContract
+export const BANK_ADDRESS = '0x67b66c99d3eb37fa76aa3ed1ff33e8e39f0b9c7a';
+
+// https://etherscan.io/token/0x67b66c99d3eb37fa76aa3ed1ff33e8e39f0b9c7a
 export const BANK_CONTRACT_DECIMALS = 18;
 
 const EMPTY_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -51,7 +54,6 @@ export function getTokensPairUsdPrice(token0: string, token1: string, cgData: IP
 }
 
 export function getTokenAmountsFromPosition(positionId: number, lpPayload: IGoblinLPPayload) {
-    // const lpPayload = position.goblinPayload?.lpPayload;
     if (!lpPayload?.userInfo || !lpPayload?.reserves) {
         throw new Error(`Position.lpPayload full info missing. This should never happen!. pid: ${positionId}`);
     }
@@ -61,8 +63,8 @@ export function getTokenAmountsFromPosition(positionId: number, lpPayload: IGobl
     const goblinLpAmount = new BigNumber(lpPayload.userInfo.amount).dividedBy(goblinLpDecimalsDivider);
     const goblinLpTotalSupply = new BigNumber(lpPayload.totalSupply).dividedBy(goblinLpDecimalsDivider);
     const goblinLpShare = goblinLpAmount.dividedBy(goblinLpTotalSupply);
-    const token0Map = LP_COINS_BSC.find(lp => lp.address === token0);
-    const token1Map = LP_COINS_BSC.find(lp => lp.address === token1);
+    const token0Map = LP_COINS_ETH.find(lp => lp.address === token0);
+    const token1Map = LP_COINS_ETH.find(lp => lp.address === token1);
     const decimalsToken0 = token0Map?.decimals || 18;
     const decimalsToken1 = token1Map?.decimals|| 18;
     const coingeckoIdToken0 = token0Map?.coingekoId;
@@ -84,17 +86,12 @@ export function getGoblinPooledValueInfo(
     pid: number,
     gp: (IPositionWithSharesFilled['goblinPayload'] & { lpPayload: IGoblinLPPayload; }), 
     coingecko: IPositionWithSharesFilled['coingecko'],
-    // token0: string,
-    // token1: string,
 ) {
     const lp = gp.lpPayload;
-    // const token0 = lpPayload.token0;
-    // const token1 = lpPayload.token1;
     const [token0Info, token1Info] = getTokenAmountsFromPosition(pid, lp);
     const [usdPriceToken0, usdPriceToken1] = getTokensPairUsdPrice(lp.token0, lp.token1, coingecko);
     const usdPricePooledToken0 = token0Info.amount.multipliedBy(usdPriceToken0);
     const usdPricePooledToken1 = token1Info.amount.multipliedBy(usdPriceToken1);
-    // goblinPayload.coingecko[0].info!.symbol
     return {
         lpToken: gp.lpToken,
         usdTotalValue: usdPricePooledToken0.plus(usdPricePooledToken1),
@@ -117,7 +114,7 @@ export function getGoblinPooledValueInfo(
 
 async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
-        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const reservePool: string = await contract.methods.reservePool().call({}, atBlockN);
         return reservePool;
     } catch (err) {
@@ -128,7 +125,7 @@ async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | n
 
 async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
-        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const glbDebtVal: string = await contract.methods.glbDebtVal().call({}, atBlockN);
         return glbDebtVal;
     } catch (err) {
@@ -139,7 +136,7 @@ async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | nu
 
 async function getGlbDebtShare(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
-        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const glbDebtVal: string = await contract.methods.glbDebtShare().call({}, atBlockN);
         return glbDebtVal;
     } catch (err) {
@@ -148,13 +145,19 @@ async function getGlbDebtShare(web3: Web3, atBlockN?: number): Promise<string | 
     }
 }
 
-async function getTotalBNB(web3: Web3, atBlockN?: number): Promise<string | null> {
+async function getShareNonPrivate(web3: Web3, goblinAddr: string, posId: number, atBLockN?: number){
+    const position = web3.utils.keccak256((posId + 11).toString(16)); // .toString(16)
+    const shares = await web3.eth.getStorageAt(goblinAddr, position, atBLockN || 'latest');
+    return shares;
+}
+
+async function getTotalETH(web3: Web3, atBlockN?: number): Promise<string | null> {
     try {
-        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
-        const totalBNB: string = await contract.methods.totalBNB().call({}, atBlockN);
-        return totalBNB;
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
+        const totalETH: string = await contract.methods.totalETH().call({}, atBlockN);
+        return totalETH;
     } catch (err) {
-        console.error(`[ERROR getTotalBNB] ${JSON.stringify({ msg: err.message })}`)
+        console.error(`[ERROR getTotalETH] ${JSON.stringify({ msg: err.message })}`)
         return null;
     }
 }
@@ -164,38 +167,27 @@ export async function syncBankValues(web3: Web3, atBlockN?: number) {
         const reservePool = await getReservePool(web3, atBlockN);
         const glbDebt = await getGlbDebtVal(web3, atBlockN);
         const glbDebtShare = await getGlbDebtShare(web3, atBlockN);
-        const totalBNB = await getTotalBNB(web3, atBlockN);
-        if (!reservePool || !glbDebt || !glbDebtShare || !totalBNB) {
-            throw new Error(`Invalid sync values ${JSON.stringify({ reservePool, glbDebt, glbDebtShare, totalBNB, atBlockN })}`);
+        const totalETH = await getTotalETH(web3, atBlockN);
+        if (!reservePool || !glbDebt || !glbDebtShare || !totalETH) {
+            throw new Error(`Invalid sync values ${JSON.stringify({ reservePool, glbDebt, glbDebtShare, totalETH, atBlockN })}`);
         }
-        return { reservePool, glbDebt, glbDebtShare, totalBNB };
+        return { reservePool, glbDebt, glbDebtShare, totalETH };
     } catch (err) {
         console.error(`[ERROR syncBankValues] ${JSON.stringify({ msg: err.message })}`)
         return;
     }
 }
 
-// // Queries the next position id from the bank contract
-// export async function getBankNextPositionId(web3: Web3, atBlockN?: number): Promise<string | null> {
-//     try {
-//         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
-//         const nextPositionID: string = await contract.methods.nextPositionID().call({}, atBlockN);
-//         return nextPositionID;
-//     } catch (err) {
-//         console.error(`[ERROR getBankNextPositionId] ${JSON.stringify({ msg: err.message })}`)
-//         return null;
-//     }
-// }
-
 type IBankPosition = {
     goblin: string; // address (if position is not found value is 0x0000000000000000000000000000000000000000)
     owner: string; // address (if position is not found value is 0x0000000000000000000000000000000000000000)
     debtShare: string; // uint256
 }
+
 // Given a position id, it queries the bank contract for the goblin, owner and debtShare properties
 async function getBankPositionById(web3: Web3, positionId: number, atBlockN?: number): Promise<IBankPosition | null> {
     try {
-        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+        const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const position: IBankPosition = await contract.methods.positions(positionId).call({}, atBlockN);
         if (position.goblin === EMPTY_ADDRESS || position.owner === EMPTY_ADDRESS) {
             return null
@@ -222,8 +214,34 @@ export type IGoblinLPPayload = {
     token0: string;
     token1: string;
 };
+
+async function getUniswapGoblinLPPayload(
+    web3: Web3,
+    lpToken: string,
+    staking: string,
+    globlinAddr: string,
+    atBlockN?: number,
+): Promise<IGoblinLPPayload | null> {
+    try {
+        const contractMC = new web3.eth.Contract((STAKING_ABI as unknown) as AbiItem, staking);
+        // NOTE: this is different on sushi contracts, on sushi there is une method called userInfo that returns this two values
+        const amount: string = await contractMC.methods.balanceOf(globlinAddr).call({}, atBlockN);
+        const earned: string = await contractMC.methods.earned(globlinAddr).call({}, atBlockN);
+        const contractLP = new web3.eth.Contract((LP_TOKEN_ABI as unknown) as AbiItem, lpToken);
+        const totalSupply: string = await contractLP.methods.totalSupply().call({}, atBlockN);
+        const decimals: string = await contractLP.methods.decimals().call({}, atBlockN);
+        const token0: string = await contractLP.methods.token0().call({}, atBlockN);
+        const token1: string = await contractLP.methods.token1().call({}, atBlockN);
+        const reserves: IGoblinLPPayload['reserves'] = await contractLP.methods.getReserves().call({}, atBlockN);
+        return { userInfo: { amount, rewardDebt: earned }, totalSupply, decimals, token0, token1, reserves };
+    } catch (err) {
+        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err.message })}`)
+        return null;
+    }
+}
+
 // calculate how much share the goblin have in that pool => goblinLpAmount/lpTotalSupply
-async function getGoblinLPPayload(
+async function getMastercheffGoblinLPPayload(
     web3: Web3,
     lpToken: string,
     masterChef: string,
@@ -247,15 +265,25 @@ async function getGoblinLPPayload(
     }
 }
 
-export type IGoblinPayload = {
+export type IGoblinPayload = IGoblinPayloadSushi | IGoblinPayloadUni;
+type IGoblinPayloadSushi = {
     shares: string;
     lpToken: string;
     masterChef: string;
     pid: string;
     lpPayload?: IGoblinLPPayload | null;
+    dex: ExchangeNames.Sushi;
+};
+type IGoblinPayloadUni = {
+    shares: string;
+    lpToken: string;
+    staking: string;
+    lpPayload?: IGoblinLPPayload | null;
+    dex: ExchangeNames.Uniswap;
 };
 
 // Given a position id, it queries goblin contract to get it's shares property
+// it may query uniswap shares contract or masterchef contract depending on the addres pool map
 async function getGoblinPayload(
     web3: Web3,
     goblinAddr: string,
@@ -263,15 +291,41 @@ async function getGoblinPayload(
     atBlockN?: number,
 ): Promise<IGoblinPayload | null> {
     try {
-        const contract = new web3.eth.Contract((GOBLIN_ABI as unknown) as AbiItem, goblinAddr);
-        const shares: string = await contract.methods.shares(positionId).call({}, atBlockN);
-        const lpToken: string = await contract.methods.lpToken().call({}, atBlockN);
-        const masterChef: string = await contract.methods.masterChef().call({}, atBlockN);
-        const pid: string = await contract.methods.pid().call({}, atBlockN);
-        const lpPayload = await getGoblinLPPayload(web3, lpToken, masterChef, pid, goblinAddr, atBlockN);
-        return { shares, lpToken, masterChef, pid, lpPayload };
+        const contractUni = new web3.eth.Contract((GOBLIN_UNI_ABI as unknown) as AbiItem, goblinAddr);
+        const contractSushi = new web3.eth.Contract((GOBLIN_SUSHI_ABI as unknown) as AbiItem, goblinAddr);
+        const poolMap = await getGoblinAddressPoolMap(goblinAddr);
+        if (poolMap.exchange === ExchangeNames.Uniswap) {
+            // NOTE: shares is not public value
+            let shares = '';
+            try {
+                shares = await contractUni.methods.shares(positionId).call({}, atBlockN);
+            } catch(err) {
+                const sharesHexVal = await getShareNonPrivate(web3, goblinAddr, positionId, atBlockN);
+                const sharesBN = new BigNumber(sharesHexVal);
+                shares = sharesBN.toString();
+                if (shares !== '0') {
+                    console.warn('SHARES!', shares);
+                } 
+            }
+            const lpToken: string = await contractUni.methods.lpToken().call({}, atBlockN);
+            const staking: string = await contractUni.methods.staking().call({}, atBlockN);
+            const lpPayload = await getUniswapGoblinLPPayload(web3, lpToken, staking, goblinAddr, atBlockN);
+            return { shares, lpToken, staking, lpPayload, dex: ExchangeNames.Uniswap  };
+
+        } else if (poolMap.exchange === ExchangeNames.Sushi) {
+            // NOTE: shares is public at sushi contract
+            const shares: string = await contractSushi.methods.shares(positionId).call({}, atBlockN);
+            const lpToken: string = await contractSushi.methods.lpToken().call({}, atBlockN);
+            const masterChef: string = await contractSushi.methods.masterChef().call({}, atBlockN);
+            const pid: string = await contractSushi.methods.pid().call({}, atBlockN);
+            const lpPayload = await getMastercheffGoblinLPPayload(web3, lpToken, masterChef, pid, goblinAddr, atBlockN);
+            return { shares, lpToken, masterChef, pid, lpPayload, dex: ExchangeNames.Sushi };
+        } else {
+            console.error(`Position from exchange not handled. goblinAddr: ${goblinAddr}, positionId: ${positionId}`);
+            return null;
+        }
     } catch (err) {
-        console.error(`[ERROR getGoblinPayload] ${JSON.stringify({ msg: err.message })}`)
+        console.error(`[ERROR getGoblinPayload] ${JSON.stringify({ msg: err.message, trace: err.stack })}`)
         return null;
     }
 }
@@ -284,8 +338,9 @@ export type IPositionWithShares = {
     goblinPayload: IGoblinPayload | null;
     isActive: boolean;
     coingecko?: ReturnType<typeof getOnlyCoingeckoRelevantinfo>;
-    bankValues?: { reservePool: string; glbDebt: string; glbDebtShare: string; totalBNB: string; };
+    bankValues?: { reservePool: string; glbDebt: string; glbDebtShare: string; totalETH: string; };
 }
+
 // Given a position id, it queries the bank and goblin contract to get the shares and know if it's an active position
 export async function getBankPositionContext(web3: Web3, positionId: number, atBlockN?: number, timestamp?: number | null) {
     const bankPositionReturn = await getBankPositionById(web3, positionId, atBlockN);
@@ -308,7 +363,7 @@ export async function getBankPositionContext(web3: Web3, positionId: number, atB
             { address: goblinPayload.lpPayload.token1, timestamp },
         ];
         positionWithShares.coingecko = getOnlyCoingeckoRelevantinfo(
-            await getCoinsInfoAndHistoryMarketData('BSC', coinsToQuery)
+            await getCoinsInfoAndHistoryMarketData('ETH', coinsToQuery)
         );
     }
     positionWithShares.goblinPayload = goblinPayload;
@@ -318,12 +373,12 @@ export async function getBankPositionContext(web3: Web3, positionId: number, atB
 
 // NOTE: get kill events only works when requesting a size of about 20k blocks each bulk, if requested more,
 // it might fail with timeout. Need to setup a strategy that sync's all events in batches.
-const MAX_BLOCKS_TO_QUERY_EACH_REQ = 1e3; // 10k
+const MAX_BLOCKS_TO_QUERY_EACH_REQ = 1e3; // 1k
 
-// This block number is taken from when the bank contract was deployed to bsc
-// https://bscscan.com/address/0x35cfacc93244fc94d26793cd6e68f59976380b3e
-const MIN_BLOCK = 5732773;
-const MAX_BLOCK = 0; // 8880893;
+// This block number is taken from when the bank contract was deployed to eth
+// https://etherscan.io/tx/0xbe3c1b7b4b1d34654d7f63badfdab362c107c090bca5b972e8e674ad3b7bfcb2
+const MIN_BLOCK = 11007158;
+const MAX_BLOCK = 0;
 
 type IValidEventNames = 'AddDebt' | 'Approval' | 'Kill' | 'RemoveDebt' | 'Transfer' | 'Work' | 'allEvents';
 type IBlockRange = { fromBlock: number, toBlock: number };
@@ -336,7 +391,10 @@ export async function getEvents(
     fromBlock: number,
     toBlock: number,
 ) {
-    const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+    // NOTA: 
+    // ANTES ERA CON PROXY ADDRS
+    // const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
+    const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
     const eventProps: IBlockRange = { fromBlock, toBlock };
     const eventsReturned = await contract.getPastEvents(eventName, eventProps);
     if (eventsReturned.length) {

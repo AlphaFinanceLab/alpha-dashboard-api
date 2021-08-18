@@ -20,6 +20,8 @@
     "exchange:binance": "npx ts-node --project tsconfig.json src/workers/binance/binance.ts",
     "bsc:sync_events": "npx ts-node src/bsc/bsc_sync_events.ts",
     "bsc:sync_events:debug": "node --inspect-brk -r ts-node/register src/bsc/bsc_sync_events.ts",
+    "eth:sync_events": "npx ts-node src/eth/eth_sync_events.ts",
+    "eth:sync_events:debug": "node --inspect-brk -r ts-node/register src/eth/eth_sync_events.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

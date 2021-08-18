@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { EventData } from 'web3-eth-contract';
-import { PrismaClient, EventsBSC } from '@prisma/client'
+import { PrismaClient, EventsETH } from '@prisma/client'
 import {
     IGetEventCallback,
     IGetErrorCallback,
@@ -17,32 +17,22 @@ const prisma = new PrismaClient();
 
 const MAX_ERRORS_COUNT_ALLOWED = 50;
 
-// Binance
-// const NODE_URL = "https://bsc-dataseed.binance.org";
-// const NODE_URL = "https://bsc-dataseed4.binance.org"
-
 // Moralis account 1
-// const NODE_URL = "https://speedy-nodes-nyc.moralis.io/6df2e03496e250e048360175/bsc/mainnet";
-// const NODE_URL = "https://speedy-nodes-nyc.moralis.io/6df2e03496e250e048360175/bsc/mainnet/archive";
+const NODE_URL = "https://speedy-nodes-nyc.moralis.io/6df2e03496e250e048360175/eth/mainnet/archive";
+// const NODE_URL = "https://speedy-nodes-nyc.moralis.io/6df2e03496e250e048360175/eth/mainnet";
 
 // Moralis account 2
-const NODE_URL = "https://speedy-nodes-nyc.moralis.io/b7a19f69cee6f40b46e40877/bsc/mainnet/archive";
-// const NODE_URL = "https://speedy-nodes-nyc.moralis.io/b7a19f69cee6f40b46e40877/bsc/mainnet";
-
-// Getblock.io simple node
-// const NODE_URL = "https://bsc.getblock.io/mainnet/?api_key=f18c2bf6-92d5-4d2c-8a62-52c7ae6886a2"; 
-
-// Chainstack.com simple node
-// const NODE_URL = "https://angry-fermat:unpack-union-civic-radar-viable-chirpy@nd-016-426-173.p2pify.com"
+// const NODE_URL = "https://speedy-nodes-nyc.moralis.io/b7a19f69cee6f40b46e40877/eth/mainnet/archive";
+// const NODE_URL = "https://speedy-nodes-nyc.moralis.io/b7a19f69cee6f40b46e40877/eth/mainnet";
 
 async function retryEventErrors(
     web3: Web3, onDone: IGetEventCallback, onError: IGetErrorCallback,
 ) {
-    const eventsErrors = await prisma.eventErrorsBSC.findMany();
+    const eventsErrors = await prisma.eventErrorsETH.findMany();
     for (const evErr of eventsErrors) {
         const onRetrySuccess: IGetEventCallback = async ed => {
             try {
-                await prisma.eventErrorsBSC.delete({
+                await prisma.eventErrorsETH.delete({
                     where: { id: evErr.id }
                 });
             } catch(delErr) {
@@ -61,7 +51,7 @@ async function retryEventErrors(
 }
 
 async function validateThereAreNoErrors() {
-    const eventsErrors = await prisma.eventErrorsBSC.findMany();
+    const eventsErrors = await prisma.eventErrorsETH.findMany();
     if (eventsErrors.length) {
         throw new Error(`There are fetching event errors. Can't continue calculating positions and indicators.`);
     }
@@ -69,10 +59,10 @@ async function validateThereAreNoErrors() {
 
 async function fillEventsTimestamps(web3: Web3) {
     const filterQuery = { where: { timestamp: { equals: null } } };
-    let count = await prisma.eventsBSC.count(filterQuery);
+    let count = await prisma.eventsETH.count(filterQuery);
     let errorsCount = 0;
     while (count && errorsCount < MAX_ERRORS_COUNT_ALLOWED) {
-        const eventsWithEmptyTimestamp = await prisma.eventsBSC.findMany({ ...filterQuery, take: 100 });
+        const eventsWithEmptyTimestamp = await prisma.eventsETH.findMany({ ...filterQuery, take: 100 });
         console.log(`Updating ${eventsWithEmptyTimestamp.length} events with empty timestamp.`);
         for (const ev of eventsWithEmptyTimestamp) {
             try {
@@ -81,9 +71,9 @@ async function fillEventsTimestamps(web3: Web3) {
                     throw new Error(`Can't get timestamp`);
                 }
                 const timestampNum = parseInt(`${timestamp}`);
-                await prisma.eventsBSC.update({
+                await prisma.eventsETH.update({
                     where: {
-                        Events_logIndex_transactionHash_unique_constraint: {
+                        EventsETH_logIndex_transactionHash_unique_constraint: {
                             transactionHash: ev.transactionHash,
                             logIndex: ev.logIndex,
                         }
@@ -93,7 +83,7 @@ async function fillEventsTimestamps(web3: Web3) {
                         updatedAt: new Date(),
                     }
                 });
-                count = await prisma.eventsBSC.count(filterQuery);
+                count = await prisma.eventsETH.count(filterQuery);
             } catch(err) {
                 errorsCount++;
                 console.error(`Can't update timestamp for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
@@ -101,7 +91,7 @@ async function fillEventsTimestamps(web3: Web3) {
                     console.error(`Limit of errors getting event timestamp reached.`);
                     return;
                 }
-                count = await prisma.eventsBSC.count(filterQuery);
+                count = await prisma.eventsETH.count(filterQuery);
             }
         }
     }
@@ -121,11 +111,11 @@ async function fillEventsContextCoingecko() {
                 ]
             },
         };
-        let count = await prisma.eventsBSC.count(filterQuery);
+        let count = await prisma.eventsETH.count(filterQuery);
         if (!count) { return; }
         let errorsCount = 0;
         while (count && errorsCount < MAX_ERRORS_COUNT_ALLOWED) {
-            const eventsWithEmptyTimestamp = await prisma.eventsBSC.findMany({ ...filterQuery, take: 100 });
+            const eventsWithEmptyTimestamp = await prisma.eventsETH.findMany({ ...filterQuery, take: 100 });
             console.log(`Updating ${eventsWithEmptyTimestamp.length} WORK or KILL events with empty coingecko values.`);
             for (const ev of eventsWithEmptyTimestamp) {
                 try {
@@ -136,11 +126,11 @@ async function fillEventsContextCoingecko() {
                             { address: contextValues.goblinPayload.lpPayload.token1, timestamp: ev.timestamp },
                         ];
                         const coingecko = getOnlyCoingeckoRelevantinfo(
-                            await getCoinsInfoAndHistoryMarketData('BSC', coinsToQuery)
+                            await getCoinsInfoAndHistoryMarketData('ETH', coinsToQuery)
                         );
-                        await prisma.eventsBSC.update({
+                        await prisma.eventsETH.update({
                             where: {
-                                Events_logIndex_transactionHash_unique_constraint: {
+                                EventsETH_logIndex_transactionHash_unique_constraint: {
                                     transactionHash: ev.transactionHash,
                                     logIndex: ev.logIndex,
                                 }
@@ -150,7 +140,7 @@ async function fillEventsContextCoingecko() {
                                 updatedAt: new Date(),
                             }
                         });
-                        count = await prisma.eventsBSC.count(filterQuery);   
+                        count = await prisma.eventsETH.count(filterQuery);   
                         await delay(300);
                     } else {
                         // query should guarantee this never happens but, just a check for TS
@@ -163,7 +153,7 @@ async function fillEventsContextCoingecko() {
                         console.error(`Limit of errors getting event coingecko values reached.`);
                         return;
                     }
-                    count = await prisma.eventsBSC.count(filterQuery);
+                    count = await prisma.eventsETH.count(filterQuery);
                 }
             }
         }
@@ -186,10 +176,10 @@ async function fillEventsContexts(web3: Web3) {
             ]
         }
     };
-    let countWorkOrKillEventsWithEmptyContext = await prisma.eventsBSC.count(filterQuery);
+    let countWorkOrKillEventsWithEmptyContext = await prisma.eventsETH.count(filterQuery);
     let errorsCount = 0;
     while (countWorkOrKillEventsWithEmptyContext && errorsCount < MAX_ERRORS_COUNT_ALLOWED) {
-        const eventsWithEmptyContext = await prisma.eventsBSC.findMany({ ...filterQuery, take: 100 });
+        const eventsWithEmptyContext = await prisma.eventsETH.findMany({ ...filterQuery, take: 100 });
         console.log(`Updating ${eventsWithEmptyContext.length} Kill or Work events with empty context.`);
         for (const ev of eventsWithEmptyContext) {
             try {
@@ -200,9 +190,9 @@ async function fillEventsContexts(web3: Web3) {
                 if (!contextValues) {
                     throw new Error(`Can't get event position context. ev: ${JSON.stringify(ev, null, 2)}`);
                 }
-                await prisma.eventsBSC.update({
+                await prisma.eventsETH.update({
                     where: {
-                        Events_logIndex_transactionHash_unique_constraint: {
+                        EventsETH_logIndex_transactionHash_unique_constraint: {
                             transactionHash: ev.transactionHash,
                             logIndex: ev.logIndex,
                         }
@@ -212,7 +202,7 @@ async function fillEventsContexts(web3: Web3) {
                         updatedAt: new Date(),
                     }
                 });
-                countWorkOrKillEventsWithEmptyContext = await prisma.eventsBSC.count(filterQuery);
+                countWorkOrKillEventsWithEmptyContext = await prisma.eventsETH.count(filterQuery);
             } catch(err) {
                 errorsCount++;
                 console.error(`Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
@@ -220,7 +210,7 @@ async function fillEventsContexts(web3: Web3) {
                     console.error(`Limit of errors getting event position context reached.`);
                     return;
                 }
-                countWorkOrKillEventsWithEmptyContext = await prisma.eventsBSC.count(filterQuery);
+                countWorkOrKillEventsWithEmptyContext = await prisma.eventsETH.count(filterQuery);
             }
         }
     }
@@ -236,10 +226,10 @@ async function fillEventsBankValueContexts(web3: Web3) {
             ]
         }
     };
-    let countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsBSC.count(filterQuery);
+    let countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsETH.count(filterQuery);
     let errorsCount = 0;
     while (countWorkOrKillEventsWithEmptyBankValues && errorsCount < MAX_ERRORS_COUNT_ALLOWED) {
-        const eventsWithEmptyBankValue = await prisma.eventsBSC.findMany({ ...filterQuery, take: 100 });
+        const eventsWithEmptyBankValue = await prisma.eventsETH.findMany({ ...filterQuery, take: 100 });
         console.log(`Updating ${eventsWithEmptyBankValue.length} Kill or Work events with empty bank value.`);
         for (const ev of eventsWithEmptyBankValue) {
             try {
@@ -247,9 +237,9 @@ async function fillEventsBankValueContexts(web3: Web3) {
                 if (!bankValues) {
                     throw new Error(`Can't get event bankValues.`);
                 }
-                await prisma.eventsBSC.update({
+                await prisma.eventsETH.update({
                     where: {
-                        Events_logIndex_transactionHash_unique_constraint: {
+                        EventsETH_logIndex_transactionHash_unique_constraint: {
                             transactionHash: ev.transactionHash,
                             logIndex: ev.logIndex,
                         }
@@ -259,7 +249,7 @@ async function fillEventsBankValueContexts(web3: Web3) {
                         updatedAt: new Date(),
                     }
                 });
-                countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsBSC.count(filterQuery);
+                countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsETH.count(filterQuery);
             } catch(err) {
                 errorsCount++;
                 console.error(`Can't update position context.bankValues for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
@@ -267,7 +257,7 @@ async function fillEventsBankValueContexts(web3: Web3) {
                     console.error(`Limit of errors getting event position context.bankValues reached.`);
                     return;
                 }
-                countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsBSC.count(filterQuery);
+                countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsETH.count(filterQuery);
             }
         }
     }
@@ -275,7 +265,7 @@ async function fillEventsBankValueContexts(web3: Web3) {
 
 // Validate all work or kill events are filled correctly
 async function countIncompleteWorkOrKillEvents() {
-    const incompleteEventsCount = await prisma.eventsBSC.count({
+    const incompleteEventsCount = await prisma.eventsETH.count({
         where: {
             AND: [
                 { OR: [{ event: 'Work' }, { event: 'Kill'}] },
@@ -301,7 +291,7 @@ async function main() {
     web3.eth.transactionBlockTimeout = 20000;
     web3.eth.transactionPollingTimeout = 60000;
     const blockN = await web3.eth.getBlockNumber();
-    const lastBlockEvent = await prisma.eventsBSC.findFirst({ orderBy: { blockNumber: 'desc' } });
+    const lastBlockEvent = await prisma.eventsETH.findFirst({ orderBy: { blockNumber: 'desc' } });
     const startingBlock = lastBlockEvent?.blockNumber
         ? (lastBlockEvent?.blockNumber - 1)
         : 1;
@@ -334,7 +324,7 @@ async function main() {
                         positionId = parseInt(singleEvent.returnValues.id);
                     }
                     // https://ethereum.stackexchange.com/questions/55155/contract-event-transactionindex-and-logindex/55157
-                    const updateSingleEvent: Omit<EventsBSC, 'updatedAt'> = {
+                    const updateSingleEvent: Omit<EventsETH, 'updatedAt'> = {
                         logIndex: singleEvent.logIndex,
                         transactionHash: singleEvent.transactionHash,
                         transactionIndex: singleEvent.transactionIndex,
@@ -346,9 +336,9 @@ async function main() {
                         positionId,
                         timestamp: timestamp ? parseInt(`${timestamp}`) : null,
                     };
-                    await prisma.eventsBSC.upsert({
+                    await prisma.eventsETH.upsert({
                         where: {
-                            Events_logIndex_transactionHash_unique_constraint: {
+                            EventsETH_logIndex_transactionHash_unique_constraint: {
                                 transactionHash: singleEvent.transactionHash,
                                 logIndex: singleEvent.logIndex,
                             }
@@ -368,7 +358,7 @@ async function main() {
             console.error('Get events error!', err?.message, range.fromBlock, range.toBlock);
             // NOTE: generating a unique id composed of the range blocks
             const syncEventRangeId = `${range.fromBlock}-${range.toBlock}`;
-            await prisma.eventErrorsBSC.upsert({
+            await prisma.eventErrorsETH.upsert({
                 where: { id: syncEventRangeId },
                 update: { startBlock: range.fromBlock, endBlock: range.toBlock },
                 create: { id: syncEventRangeId, startBlock: range.fromBlock, endBlock: range.toBlock },
@@ -395,7 +385,7 @@ async function main() {
     const doneWithoutErrors = (incompleteCount === 0 && getEventsBatchesWithErrors === 0);
     if (doneWithoutErrors) {
         console.log(`[DONE] Sync Events Without errors. Calculating periodic snapshots...`);
-        const countEventsWithoutPayload = await prisma.eventsBSC.count({ where: {
+        const countEventsWithoutPayload = await prisma.eventsETH.count({ where: {
             AND: [
                 { event: { in: ['Work', 'Kill'] } },
                 {

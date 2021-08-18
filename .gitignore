@@ -18,3 +18,4 @@ src/graphql/generated.ts
 .vscode/launch.json
 mercurius-schema.json
 TODO
+NOTES
