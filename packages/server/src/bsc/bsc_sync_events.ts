@@ -1,3 +1,4 @@
+import '../lib/config';
 import Web3 from 'web3';
 import { EventData } from 'web3-eth-contract';
 import { PrismaClient, EventsBSC } from '@prisma/client'
