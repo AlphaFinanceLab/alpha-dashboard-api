@@ -19,5 +19,13 @@ module.exports = {
             time: true,
             kill_timeout: 1200000,
         },
+        {
+            name: 'eth_sync',
+            script: './build/eth/eth_sync_events.js',
+            cron_restart: "0-59/3 * * * *", // sync every 3 mins
+            autorestart: false,
+            time: true,
+            kill_timeout: 1200000,
+        },
     ],
 }
