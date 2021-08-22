@@ -100,7 +100,7 @@ export const LP_COINS_BSC = [
     { address: '0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402', coingekoId: 'polkadot', decimals: 18 },
 ];
 const BSC_MAP_COINS_ADDR_TO_ID: { [addr: string]: string; } = {};
-LP_COINS_BSC.forEach(c => BSC_MAP_COINS_ADDR_TO_ID[c.address] = c.coingekoId);
+LP_COINS_BSC.forEach(c => BSC_MAP_COINS_ADDR_TO_ID[c.address.toLowerCase()] = c.coingekoId);
 
 export const LP_COINS_ETH = [
     { address: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599', coingekoId: 'wrapped-bitcoin', decimals: 8 },
@@ -135,7 +135,7 @@ export const LP_COINS_ETH = [
     { address: '0xa1faa113cbe53436df28ff0aee54275c13b40975', coingekoId: 'alpha-finance', decimals: 18 },
 ];
 const ETH_MAP_COINS_ADDR_TO_ID: { [addr: string]: string; } = {};
-LP_COINS_ETH.forEach(c => ETH_MAP_COINS_ADDR_TO_ID[c.address] = c.coingekoId);
+LP_COINS_ETH.forEach(c => ETH_MAP_COINS_ADDR_TO_ID[c.address.toLowerCase()] = c.coingekoId);
 
 type ICoinToQuery = { address: string; timestamp: number; }
 export type ICoinWithInfoAndUsdPrice = ICoinToQuery & { info: ICoinGeckoCoin | null; marketData: ICoinMarketData | undefined; };
@@ -146,24 +146,27 @@ export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC' | 'ETH', coi
         const coinsAddressInfoMap: { [addr: string]: ICoinGeckoCoin } = {};
         // in cases where there are coins bsc address that coingecko is not updated with their address, use the custom map
         for (const cq of coinsToQuery) {
-            if (BSC_MAP_COINS_ADDR_TO_ID[cq.address]) {
-                const coinInfo = allCoins.find(c => c.id === BSC_MAP_COINS_ADDR_TO_ID[cq.address]);
+            const cqAddr = cq.address.toLowerCase();
+            if (BSC_MAP_COINS_ADDR_TO_ID[cqAddr]) {
+                const coinInfo = allCoins.find(c => c.id === BSC_MAP_COINS_ADDR_TO_ID[cqAddr]);
                 if (coinInfo) {
-                    coinsAddressInfoMap[cq.address] = coinInfo;
+                    coinsAddressInfoMap[cqAddr] = coinInfo;
                 }
             }
         }
         // first get the coin info
         for (const bscCoin of bscCoins) {
             coinsToQuery.some(cq => {
-                const matches = cq.address.toLowerCase() === ((bscCoin.platforms || {})['binance-smart-chain']).toLowerCase();
-                if (matches && !coinsAddressInfoMap[cq.address]) { coinsAddressInfoMap[cq.address] = bscCoin; }
+                const cqAddr = cq.address.toLowerCase();
+                const matches = cqAddr === ((bscCoin.platforms || {})['binance-smart-chain']).toLowerCase();
+                if (matches && !coinsAddressInfoMap[cqAddr]) { coinsAddressInfoMap[cqAddr] = bscCoin; }
                 return matches;
             });
         }
         const ret: ICoinWithInfoAndUsdPrice[] = [];
         for (const coin of coinsToQuery) {
-            const info: ICoinGeckoCoin | undefined = coinsAddressInfoMap[coin.address];
+            const coinAddr = coin.address.toLowerCase();
+            const info: ICoinGeckoCoin | undefined = coinsAddressInfoMap[coinAddr];
             if (info) {
                 const marketData = await getCoinHistoryMarketData(info.id, new Date(coin.timestamp*1000));
                 if (marketData) {
@@ -181,10 +184,11 @@ export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC' | 'ETH', coi
         const coinsAddressInfoMap: { [addr: string]: ICoinGeckoCoin } = {};
         // in cases where there are coins bsc address that coingecko is not updated with their address, use the custom map
         for (const cq of coinsToQuery) {
-            if (ETH_MAP_COINS_ADDR_TO_ID[cq.address]) {
-                const coinInfo = allCoins.find(c => c.id === ETH_MAP_COINS_ADDR_TO_ID[cq.address]);
+            const cqAddr = cq.address.toLowerCase();
+            if (ETH_MAP_COINS_ADDR_TO_ID[cqAddr]) {
+                const coinInfo = allCoins.find(c => c.id === ETH_MAP_COINS_ADDR_TO_ID[cqAddr]);
                 if (coinInfo) {
-                    coinsAddressInfoMap[cq.address] = coinInfo;
+                    coinsAddressInfoMap[cqAddr] = coinInfo;
                 } else {
                     console.error(`Can't get coingecko info for ${chain}: ${JSON.stringify(cq)}.`);
                 }
@@ -193,18 +197,16 @@ export async function getCoinsInfoAndHistoryMarketData(chain: 'BSC' | 'ETH', coi
         // first get the coin info
         for (const ethCoin of ethCoins) {
             coinsToQuery.some(cq => {
-                const matches = cq.address.toLowerCase() === ((ethCoin.platforms || {})['ethereum']).toLowerCase();
-                if (matches && !coinsAddressInfoMap[cq.address]) {
-                    coinsAddressInfoMap[cq.address] = ethCoin;
-                } else if (!matches) {
-                    console.error(`Can't get coingecko info for ${chain}: ${JSON.stringify(cq)}.`);
-                }
+                const cqAddr = cq.address.toLowerCase();
+                const matches = cqAddr === ((ethCoin.platforms || {})['ethereum']).toLowerCase();
+                if (matches && !coinsAddressInfoMap[cqAddr]) { coinsAddressInfoMap[cqAddr] = ethCoin; }
                 return matches;
             });
         }
         const ret: ICoinWithInfoAndUsdPrice[] = [];
         for (const coin of coinsToQuery) {
-            const info: ICoinGeckoCoin | undefined = coinsAddressInfoMap[coin.address];
+            const coinAddr = coin.address.toLowerCase();
+            const info: ICoinGeckoCoin | undefined = coinsAddressInfoMap[coinAddr];
             if (info) {
                 const marketData = await getCoinHistoryMarketData(info.id, new Date(coin.timestamp*1000));
                 if (marketData) {

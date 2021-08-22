@@ -321,7 +321,7 @@ async function getGoblinPayload(
             const lpPayload = await getMastercheffGoblinLPPayload(web3, lpToken, masterChef, pid, goblinAddr, atBlockN);
             return { shares, lpToken, masterChef, pid, lpPayload, dex: ExchangeNames.Sushi };
         } else {
-            console.error(`Position from exchange not handled. goblinAddr: ${goblinAddr}, positionId: ${positionId}`);
+            console.error(`Position from exchange not handled (${poolMap.exchange}). goblinAddr: ${goblinAddr}, positionId: ${positionId}`);
             return null;
         }
     } catch (err) {
