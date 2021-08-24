@@ -38,4 +38,33 @@ export const Query: RequiredQueryResolvers = {
         });
         return ev;
     },
+    async ethIndicators(_obj, args, _ctx) {
+      const indicators = await prisma.indicatorsETH.findMany({
+        where: {
+          AND: [
+            { timestamp: { gte: args.from } },
+            { timestamp: { lte: args.to } }
+          ]
+        },
+        take: 200,
+      });
+      return indicators;
+    },
+    async ethEvents(_obj, args, _ctx) {
+      /// Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval
+      const VALID_EVENTS = ['AddDebt', 'RemoveDebt', 'Work', 'Kill', 'Transfer', 'Approval'];
+      const typesProvided = new Set<string>(args.types);
+      if (args.types.some((t: string) => !VALID_EVENTS.includes(t))) {
+        throw new Error(`Invalid type provided. Valid types are ${VALID_EVENTS.join(',')}`);
+      }
+      const ev = await prisma.eventsETH.findMany({
+      where: { AND: [
+          { timestamp : { gte: args.from }},
+          { timestamp : { lte: args.to }},
+          { event: { in: [...typesProvided] }},
+          { irrelevant: false }
+      ]},
+      });
+      return ev;
+    },
 };
