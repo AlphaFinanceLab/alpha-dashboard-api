@@ -364,8 +364,16 @@ export async function getBankPositionContext(
         isActive: false,
         bankValues,
     };
-
-    const poolMap = await getGoblinAddressPoolMap(bankPositionReturn.goblin);
+    const IGNORED_GOBLIN_ADDRESSES = [
+        '0x9EED7274Ea4b614ACC217e46727d377f7e6F9b24',
+        '0xA4BC927300F174155b95d342488Cb2431E7E864E',
+    ]
+    const isIgnoredGoblinAddr = IGNORED_GOBLIN_ADDRESSES.some(
+        (addr => addr.toLowerCase() === bankPositionReturn.goblin?.toLowerCase())
+    );
+    const poolMap = isIgnoredGoblinAddr
+        ? undefined
+        : await getGoblinAddressPoolMap(bankPositionReturn.goblin);
     // NOTE: there are positions that can be considered irrelevant
     // due to that they belong to filed / removed contracts.
     // Or events from exchanges that are not implemented
