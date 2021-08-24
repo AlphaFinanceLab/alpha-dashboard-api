@@ -193,7 +193,8 @@ async function *batchedEventsAfterCurrent({ current }: IEventsPaginator) {
     const currentQuery = (
         { where: { AND: [
             { event: { in: ['Work', 'Kill', 'AddDebt', 'RemoveDebt'] } },
-            { blockNumber: { gte: current?.blockNumber || 0 }}
+            { blockNumber: { gte: current?.blockNumber || 0 }},
+            { irrelevant: false },
         ] }}
     );
     const eventsListCount = await prisma.eventsBSC.count(currentQuery as Parameters<typeof prisma.eventsBSC.count>[0]);

@@ -30,16 +30,31 @@ schema and versioned persisted queries so that this generated files can be used 
 ## Server package
 Contains the nodejs application that uses postgres and implements the graphql schema. The server application uses Prisma, an ORM with a custom language like graphql that also generates typescript types based on an schema. Prisma manages craetion and migration of the postgrs db, the prisma schema definition is at `./packages/server/src/prisma/schema.prisma`.
 
-### PM2 setup
-The server also implements cron tasks scheduled to periodically run using [PM2](https://pm2.keymetrics.io/docs/usage/pm2-doc-single-page/)
+## PM2 setup
+
+The server implements cron tasks scheduled to periodically run using [PM2](https://pm2.keymetrics.io/docs/usage/pm2-doc-single-page/)
  (e.g.: query different exchanges).
  
 Install:
 ```
 npm install pm2@latest -g
 ```
- 
- The pm2 scheduler definitions are at `./packages/server/ecosystem.config.js`.
+### First data sync
+ The server's first sync will be a long task that will bring all events since the contract deploy block for each chain. This first command needs the be run manually, not using the pm2 crontabs. E.g.: 
+
+```
+# From the packages/server folder, run:
+pm2 start yarn -- eth:sync_events
+
+# then for the bsc first sync, run:
+pm2 start yarn -- bsc:sync_events
+```
+
+Once those two commands are done and up to date, remove them from the pm2 proocess and load the ecosystem that runs the cron tasks.
+
+### Periodical data sync
+
+The pm2 scheduler definitions are at `./packages/server/ecosystem.config.js`.
 
 ```
 pm2 start ecosystem.config.js

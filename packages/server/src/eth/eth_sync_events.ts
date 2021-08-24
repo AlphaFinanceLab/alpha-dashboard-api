@@ -9,10 +9,12 @@ import {
     getBankPositionContext,
     IPositionWithShares,
     syncBankValues,
+    IHandleIrrelevantPositions
 } from './lib/bank';
 import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo } from '../lib/coingecko';
 import { fillHistoricalSnapshots } from './lib/aggregation';
 import { delay } from '../lib/util';
+import { ExchangeNames } from './lib/contractsMap';
 
 const prisma = new PrismaClient();
 
@@ -109,6 +111,7 @@ async function fillEventsContextCoingecko() {
                     { contextValues: { path: ['goblinPayload', 'lpPayload'], not: null } },
                     { contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], not: null } },
                     { contextValues: { path: ['coingecko'], equals: null } },
+                    { irrelevant: false }
                 ]
             },
         };
@@ -163,6 +166,26 @@ async function fillEventsContextCoingecko() {
     }
 }
 
+// Considering that there are exchanges not supported and goblin contracts that were removed/failed
+// this function helps mark those events/positions as irrelevant
+const isIrrelevantPosition: IHandleIrrelevantPositions = (_w3, _pid, _bn, _tm, position, pool) => {
+    // only suppoort uni and sushi eth exchanges
+    const isValidPoolExchange = (
+        (pool?.exchange === ExchangeNames.Uniswap)
+        || (pool?.exchange === ExchangeNames.Sushi)
+    );
+    // This list of addresses are goblin contracts that were removed due to security issues
+    const IGNORED_GOBLIN_ADDRESSES = [
+        '0x9EED7274Ea4b614ACC217e46727d377f7e6F9b24',
+        '0xA4BC927300F174155b95d342488Cb2431E7E864E',
+    ]
+    const isIgnoredGoblinAddr = IGNORED_GOBLIN_ADDRESSES.some(
+        (addr => addr.toLowerCase() === position?.goblin.toLowerCase())
+    );
+    const shouldSkip = !isValidPoolExchange || isIgnoredGoblinAddr;
+    return shouldSkip;
+};
+
 async function fillEventsContexts(web3: Web3) {
     // let countUsers = await prisma.eventsBSC.count({ where: { timestamp: { equals: null } } });
     const filterQuery = {
@@ -173,7 +196,8 @@ async function fillEventsContexts(web3: Web3) {
                 { OR: [
                     {contextValues: { equals: null } },
                     {contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], equals: null } },
-                ]}
+                ]},
+                { irrelevant: false },
             ]
         }
     };
@@ -185,10 +209,15 @@ async function fillEventsContexts(web3: Web3) {
         for (const ev of eventsWithEmptyContext) {
             try {
                 const posId = (ev.returnValues as any)?.id;
+                let irrelevant = false;
+                const irrelevantPositionHandler: IHandleIrrelevantPositions = (w3, pid, bn, tm, position, pool) => {
+                    irrelevant = isIrrelevantPosition(w3, pid, bn, tm, position, pool);
+                    return irrelevant;
+                };
                 const contextValues = (posId) 
-                    ? (await getBankPositionContext(web3, posId, ev.blockNumber, ev.timestamp))
+                    ? (await getBankPositionContext(web3, posId, ev.blockNumber, ev.timestamp, irrelevantPositionHandler))
                     : null;
-                if (!contextValues) {
+                if (!contextValues && !irrelevant) {
                     throw new Error(`Can't get event position context. ev: ${JSON.stringify(ev, null, 2)}`);
                 }
                 await prisma.eventsETH.update({
@@ -199,6 +228,7 @@ async function fillEventsContexts(web3: Web3) {
                         }
                     },
                     data: {
+                        irrelevant,
                         contextValues,
                         updatedAt: new Date(),
                     }
@@ -224,6 +254,7 @@ async function fillEventsBankValueContexts(web3: Web3) {
                 { OR: [{ event: 'Work' }, { event: 'Kill'}] },
                 {contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], not: { equals: null } } },
                 {contextValues: { path: ['bankValues', 'reservePool'], equals: null } },
+                { irrelevant: false },
             ]
         }
     };
@@ -280,6 +311,7 @@ async function countIncompleteWorkOrKillEvents() {
                         { timestamp: { equals: null } },
                     ]
                 },
+                { irrelevant: false },
             ]
         }
     });
@@ -302,19 +334,22 @@ async function main() {
         for (const singleEvent of ev) {
             let timestamp: string | number | undefined;
             let contextValues: IPositionWithShares | null = null;
+            let irrelevant = false;
             try {
+                const irrelevantPositionHandler: IHandleIrrelevantPositions = (w3, pid, bn, tm, position, pool) => {
+                    irrelevant = isIrrelevantPosition(w3, pid, bn, tm, position, pool);
+                    return irrelevant;
+                };
                 timestamp = (await web3.eth.getBlock(singleEvent.blockNumber)).timestamp;
                 if (
                     (singleEvent.event === 'Work' || singleEvent.event === 'Kill')
                     && singleEvent.returnValues?.id
                     && timestamp
                  ) {
-                    contextValues = await getBankPositionContext(
-                        web3,
-                        singleEvent.returnValues?.id,
-                        singleEvent.blockNumber,
-                        parseInt(`${timestamp}`),
-                    );
+                    const posId = singleEvent.returnValues?.id;
+                    contextValues = (posId)
+                        ? await getBankPositionContext(web3, posId, singleEvent.blockNumber, parseInt(`${timestamp}`), irrelevantPositionHandler)
+                        : null;
                 }
             } catch(e) {
                 console.error('ERROR GETTING BLOCK TIMESTAMP', singleEvent.blockNumber, e);
@@ -335,6 +370,7 @@ async function main() {
                         returnValues: singleEvent.returnValues,
                         contextValues,
                         positionId,
+                        irrelevant,
                         timestamp: timestamp ? parseInt(`${timestamp}`) : null,
                     };
                     await prisma.eventsETH.upsert({

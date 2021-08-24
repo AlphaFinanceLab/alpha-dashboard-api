@@ -69,6 +69,7 @@ model PositionWithSharesETH {
   owner         String   @db.VarChar(255)
   debtShare     String   @db.VarChar(255)
   goblinPayload Json?
+  irrelevant    Boolean  @default(false)
   isActive      Boolean  @default(false)
   updatedAt     DateTime @default(now())
 }
@@ -85,6 +86,7 @@ model EventsETH {
   positionId       Int?
   timestamp        Int?
   updatedAt        DateTime @default(now())
+  irrelevant       Boolean @default(false)
   @@unique([logIndex, transactionHash], name: "EventsETH_logIndex_transactionHash_unique_constraint")
 }
 

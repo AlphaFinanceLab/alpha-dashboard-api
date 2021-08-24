@@ -11,7 +11,7 @@ import MASTERCHEF_ABI from '../abis/masterchef_abi.json';
 import LP_TOKEN_ABI from '../abis/lp_token_abi.json';
 import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo, ICoinWithInfoAndUsdPrice, LP_COINS_ETH } from '../../lib/coingecko';
 import { Ensure } from '../../lib/util';
-import { getGoblinAddressPoolMap, ExchangeNames } from './contractsMap';
+import { getGoblinAddressPoolMap, ExchangeNames, Pool } from './contractsMap';
 
 export type ICoinWithInfoAndUsdPriceFilled = Ensure<ICoinWithInfoAndUsdPrice, 'info' | 'marketData'>;
 export type IPositionWithSharesFilled = Ensure<IPositionWithShares, 'goblinPayload' | 'bankValues'> & { coingecko: ICoinWithInfoAndUsdPriceFilled; }
@@ -342,7 +342,16 @@ export type IPositionWithShares = {
 }
 
 // Given a position id, it queries the bank and goblin contract to get the shares and know if it's an active position
-export async function getBankPositionContext(web3: Web3, positionId: number, atBlockN?: number, timestamp?: number | null) {
+export type IHandleIrrelevantPositions = (
+    (w3: Web3, pid: number, bn?: number, tm?: number | null, bankPosition?: IBankPosition, pool?: Pool) => boolean
+);
+export async function getBankPositionContext(
+    web3: Web3,
+    positionId: number,
+    atBlockN?: number,
+    timestamp?: number | null,
+    isIrrelevantPosition?: IHandleIrrelevantPositions,
+) {
     const bankPositionReturn = await getBankPositionById(web3, positionId, atBlockN);
     if (!bankPositionReturn) { return null; }
     const bankValues = await syncBankValues(web3, atBlockN);
@@ -355,8 +364,19 @@ export async function getBankPositionContext(web3: Web3, positionId: number, atB
         isActive: false,
         bankValues,
     };
-    const goblinPayload = await getGoblinPayload(web3, bankPositionReturn.goblin, positionId, atBlockN);
 
+    const poolMap = await getGoblinAddressPoolMap(bankPositionReturn.goblin);
+    // NOTE: there are positions that can be considered irrelevant
+    // due to that they belong to filed / removed contracts.
+    // Or events from exchanges that are not implemented
+    const isIrrelevant = isIrrelevantPosition
+        ? (isIrrelevantPosition(web3, positionId, atBlockN, timestamp, bankPositionReturn, poolMap))
+        : false;
+    if (isIrrelevant) {
+        // don't get goblin payload or coingecko info for irrelevant positions/events
+        return positionWithShares;
+    }
+    const goblinPayload = await getGoblinPayload(web3, bankPositionReturn.goblin, positionId, atBlockN);
     if (timestamp && goblinPayload?.lpPayload) {
         const coinsToQuery = [
             { address: goblinPayload.lpPayload.token0, timestamp },
