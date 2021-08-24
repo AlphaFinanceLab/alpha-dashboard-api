@@ -1,6 +1,6 @@
 import { eachHourOfInterval, startOfHour, endOfHour, getUnixTime } from 'date-fns';
 import { BigNumber } from "bignumber.js";
-import { PrismaClient, EventsBSC } from '@prisma/client';
+import { PrismaClient, EventsETH } from '@prisma/client';
 import {
     IPositionWithSharesFilled,
     borrowInterestRate,
@@ -63,7 +63,7 @@ const getInitialAggregationState = () => ({
 });
 
 const getLastAggregationStateAndCursor = async () => {
-    const lastBlockEvent = await prisma.indicatorsBSC.findFirst({ orderBy: { timestamp: 'desc' } });
+    const lastBlockEvent = await prisma.indicatorsETH.findFirst({ orderBy: { timestamp: 'desc' } });
     if (!lastBlockEvent) {
         return null;
     }
@@ -183,7 +183,7 @@ const deepCloneState = (s: IAggregationState) => ({
 // Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval)
 type ICurrentEvent = { blockNumber: number; logIndex: number; };
 type IEventsPaginator = { current?: ICurrentEvent };
-type EventsBSCFilled = Ensure<EventsBSC, 'timestamp' | 'contextValues'> & {
+type EventsETHFilled = Ensure<EventsETH, 'timestamp' | 'contextValues'> & {
     contextValues: IPositionWithSharesFilled;
 }
 // Generator that will paginate all events in batches
@@ -197,15 +197,15 @@ async function *batchedEventsAfterCurrent({ current }: IEventsPaginator) {
             { irrelevant: false },
         ] }}
     );
-    const eventsListCount = await prisma.eventsBSC.count(currentQuery as Parameters<typeof prisma.eventsBSC.count>[0]);
+    const eventsListCount = await prisma.eventsETH.count(currentQuery as Parameters<typeof prisma.eventsETH.count>[0]);
     const totalPages = Math.ceil(eventsListCount/BATCH_SIZE);
     while (currentPage < totalPages) {
-        const eventsList = await prisma.eventsBSC.findMany({
-            ...currentQuery as Parameters<typeof prisma.eventsBSC.findMany>[0],
+        const eventsList = await prisma.eventsETH.findMany({
+            ...currentQuery as Parameters<typeof prisma.eventsETH.findMany>[0],
             orderBy: [{ blockNumber: 'asc' }, { logIndex: 'asc' }],
             take: BATCH_SIZE,
             skip: currentPage * BATCH_SIZE,
-        }) as EventsBSCFilled[];
+        }) as EventsETHFilled[];
         currentPage++;
         const eventsToProcess = current
             ? eventsList.filter(ev => !(ev.blockNumber === current.blockNumber && ev.logIndex <= current.logIndex))
@@ -221,7 +221,7 @@ async function fillPeriodIndicators(startOfPeriod: Date, state: IAggregationStat
     const indicators = deepCloneState(state);
     try {
         // Unique constraint failed on the fields: (`timestamp`)
-        await prisma.indicatorsBSC.upsert({
+        await prisma.indicatorsETH.upsert({
             where: { timestamp },
             update: { indicators, lastEvent },
             create: { timestamp, indicators, lastEvent },
@@ -291,7 +291,7 @@ export async function fillHistoricalSnapshots() {
                     // ev.contextValues.goblinPayload.lpPayload?.reserves
                 }
                 if (ev.positionId) {
-                    const positionPrevState = await prisma.positionWithSharesBSC.findUnique({ where: { id: ev.positionId } });
+                    const positionPrevState = await prisma.positionWithSharesETH.findUnique({ where: { id: ev.positionId } });
                     const updatePosition = {
                         id: ev.positionId,
                         goblin: ev.contextValues.goblin,
@@ -300,7 +300,7 @@ export async function fillHistoricalSnapshots() {
                         goblinPayload: ev.contextValues.goblinPayload,
                         isActive: ev.contextValues.isActive,
                     }
-                    await prisma.positionWithSharesBSC.upsert({
+                    await prisma.positionWithSharesETH.upsert({
                         where: { id: ev.positionId },
                         update: updatePosition,
                         create: updatePosition,
@@ -332,7 +332,7 @@ export async function fillHistoricalSnapshots() {
                 }
             } else if (ev.event === 'Kill') {
                 if (ev.positionId) {
-                    const positionPrevState = await prisma.positionWithSharesBSC.findUnique({ where: { id: ev.positionId } });
+                    const positionPrevState = await prisma.positionWithSharesETH.findUnique({ where: { id: ev.positionId } });
                     if (!positionPrevState) {
                         throw new Error(`Kill event without positionPrevState should never happen!. pid: ${ev.positionId}, ${ev.transactionHash} ${ev.logIndex}`);
                     }
