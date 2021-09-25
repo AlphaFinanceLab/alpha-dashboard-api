@@ -16,12 +16,12 @@
     "start:prod:debug": "NODE_ENV=production node --inspect-brk ./build/index.js",
     "start:dev": "NODE_ENV=development npx nodemon",
     "start:dev:debug": "export TS_NODE_FILES=true && node --inspect-brk node_modules/.bin/ts-node ./src/index.ts",
-    "exchange:kraken": "npx ts-node --project tsconfig.json src/workers/kraken/kraken.ts",
-    "exchange:binance": "npx ts-node --project tsconfig.json src/workers/binance/binance.ts",
     "bsc:sync_events": "npx ts-node src/bsc/bsc_sync_events.ts",
     "bsc:sync_events:debug": "node --inspect-brk -r ts-node/register src/bsc/bsc_sync_events.ts",
     "eth:sync_events": "npx ts-node src/eth/eth_sync_events.ts",
     "eth:sync_events:debug": "node --inspect-brk -r ts-node/register src/eth/eth_sync_events.ts",
+    "ethv2:sync_events": "npx ts-node src/ethV2/eth_v2_sync_events.ts",
+    "ethv2:sync_events:debug": "node --inspect-brk -r ts-node/register src/ethV2/eth_v2_sync_events.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

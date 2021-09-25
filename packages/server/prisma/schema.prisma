@@ -97,3 +97,39 @@ model EventErrorsETH {
   retries    Int      @default(0)
   updatedAt  DateTime @default(now())
 }
+
+// ============================ ETH BANK V2 ============================
+model EventsV2ETH {
+  logIndex Int
+  transactionHash String   @db.VarChar(255)
+  transactionIndex Int
+  address          String   @db.VarChar(255)
+  blockNumber      Int
+  event            String   @db.VarChar(255)
+  returnValues     Json?
+  contextValues    Json?
+  positionId       Int?
+  timestamp        Int?
+  updatedAt        DateTime @default(now())
+  irrelevant       Boolean @default(false)
+  @@unique([logIndex, transactionHash], name: "EventsV2ETH_logIndex_transactionHash_unique_constraint")
+}
+
+model EventErrorsV2ETH {
+  id         String  @id
+  startBlock Int
+  endBlock   Int
+  retries    Int      @default(0)
+  updatedAt  DateTime @default(now())
+}
+
+// model PositionWithSharesV2ETH {
+//   id            Int      @id
+//   goblin        String   @db.VarChar(255)
+//   owner         String   @db.VarChar(255)
+//   debtShare     String   @db.VarChar(255)
+//   goblinPayload Json?
+//   irrelevant    Boolean  @default(false)
+//   isActive      Boolean  @default(false)
+//   updatedAt     DateTime @default(now())
+// }

@@ -103,6 +103,7 @@ const BSC_MAP_COINS_ADDR_TO_ID: { [addr: string]: string; } = {};
 LP_COINS_BSC.forEach(c => BSC_MAP_COINS_ADDR_TO_ID[c.address.toLowerCase()] = c.coingekoId);
 
 export const LP_COINS_ETH = [
+    { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', coingekoId: 'weth', decimals: 18 },
     { address: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599', coingekoId: 'wrapped-bitcoin', decimals: 8 },
     { address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', coingekoId: 'usd-coin', decimals: 6 },
     { address: '0xdac17f958d2ee523a2206206994597c13d831ec7', coingekoId: 'tether', decimals: 6 },
