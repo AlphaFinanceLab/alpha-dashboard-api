@@ -120,8 +120,8 @@ async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | n
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const reservePool: string = await contract.methods.reservePool().call({}, atBlockN);
         return reservePool;
-    } catch (err) {
-        console.error(`[ERROR reservePool] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR reservePool] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -131,8 +131,8 @@ async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | nu
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const glbDebtVal: string = await contract.methods.glbDebtVal().call({}, atBlockN);
         return glbDebtVal;
-    } catch (err) {
-        console.error(`[ERROR getGlbDebtVal] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGlbDebtVal] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -142,8 +142,8 @@ async function getGlbDebtShare(web3: Web3, atBlockN?: number): Promise<string | 
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const glbDebtVal: string = await contract.methods.glbDebtShare().call({}, atBlockN);
         return glbDebtVal;
-    } catch (err) {
-        console.error(`[ERROR getGlbDebtShare] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGlbDebtShare] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -153,8 +153,8 @@ async function getTotalBNB(web3: Web3, atBlockN?: number): Promise<string | null
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_PROXY_ADDRESS);
         const totalBNB: string = await contract.methods.totalBNB().call({}, atBlockN);
         return totalBNB;
-    } catch (err) {
-        console.error(`[ERROR getTotalBNB] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getTotalBNB] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -169,8 +169,8 @@ export async function syncBankValues(web3: Web3, atBlockN?: number) {
             throw new Error(`Invalid sync values ${JSON.stringify({ reservePool, glbDebt, glbDebtShare, totalBNB, atBlockN })}`);
         }
         return { reservePool, glbDebt, glbDebtShare, totalBNB };
-    } catch (err) {
-        console.error(`[ERROR syncBankValues] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR syncBankValues] ${JSON.stringify({ msg: err?.message })}`)
         return;
     }
 }
@@ -201,8 +201,8 @@ async function getBankPositionById(web3: Web3, positionId: number, atBlockN?: nu
             return null
         }
         return position;
-    } catch (err) {
-        console.error(`[ERROR getBankPositionById] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getBankPositionById] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -241,8 +241,8 @@ async function getGoblinLPPayload(
         const token1: string = await contractLP.methods.token1().call({}, atBlockN);
         const reserves: IGoblinLPPayload['reserves'] = await contractLP.methods.getReserves().call({}, atBlockN);
         return { userInfo, totalSupply, decimals, token0, token1, reserves };
-    } catch (err) {
-        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -270,8 +270,8 @@ async function getGoblinPayload(
         const pid: string = await contract.methods.pid().call({}, atBlockN);
         const lpPayload = await getGoblinLPPayload(web3, lpToken, masterChef, pid, goblinAddr, atBlockN);
         return { shares, lpToken, masterChef, pid, lpPayload };
-    } catch (err) {
-        console.error(`[ERROR getGoblinPayload] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGoblinPayload] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -375,7 +375,7 @@ export async function getEventsInBatches(
                 fromBlockLoop = toBlockLoop + 1;
                 const nextBlockLoopEnd = fromBlockLoop + MAX_BLOCKS_TO_QUERY_EACH_REQ;
                 toBlockLoop = nextBlockLoopEnd > endBlock ? endBlock : nextBlockLoopEnd;
-            } catch(e) {
+            } catch(e: any) {
                 requestErrors++;
                 await onGetErrorCallback({ fromBlock: fromBlockLoop, toBlock: toBlockLoop }, e);
                 fromBlockLoop = toBlockLoop + 1;
@@ -387,7 +387,7 @@ export async function getEventsInBatches(
     } else {
         try {
             await getEvents(web3, eventName, onGetEventCallback, startingBlock, endBlock)
-        } catch(e) {
+        } catch(e: any) {
             requestErrors++;
             await onGetErrorCallback({ fromBlock: startingBlock, toBlock: endBlock }, e);
         } finally {

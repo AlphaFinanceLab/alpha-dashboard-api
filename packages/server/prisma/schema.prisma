@@ -99,6 +99,12 @@ model EventErrorsETH {
 }
 
 // ============================ ETH BANK V2 ============================
+model IndicatorsV2ETH {
+  timestamp     Int      @id
+  indicators    Json
+  lastEvent     Json
+}
+
 model EventsV2ETH {
   logIndex Int
   transactionHash String   @db.VarChar(255)
@@ -123,13 +129,11 @@ model EventErrorsV2ETH {
   updatedAt  DateTime @default(now())
 }
 
-// model PositionWithSharesV2ETH {
-//   id            Int      @id
-//   goblin        String   @db.VarChar(255)
-//   owner         String   @db.VarChar(255)
-//   debtShare     String   @db.VarChar(255)
-//   goblinPayload Json?
-//   irrelevant    Boolean  @default(false)
-//   isActive      Boolean  @default(false)
-//   updatedAt     DateTime @default(now())
-// }
+model PositionWithSharesV2ETH {
+  id            Int      @id
+  owner         String   @db.VarChar(255)
+  payload       Json?
+  irrelevant    Boolean  @default(false)
+  isActive      Boolean  @default(false)
+  updatedAt     DateTime @default(now())
+}

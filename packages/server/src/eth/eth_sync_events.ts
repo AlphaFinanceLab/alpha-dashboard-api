@@ -87,9 +87,9 @@ async function fillEventsTimestamps(web3: Web3) {
                     }
                 });
                 count = await prisma.eventsETH.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`Can't update timestamp for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`Can't update timestamp for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`Limit of errors getting event timestamp reached.`);
                     return;
@@ -150,9 +150,9 @@ async function fillEventsContextCoingecko() {
                         // query should guarantee this never happens but, just a check for TS
                         throw new Error('Ups!');
                     }
-                } catch(err) {
+                } catch(err: any) {
                     errorsCount++;
-                    console.error(`Can't update coingecko values for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                    console.error(`Can't update coingecko values for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                     if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                         console.error(`Limit of errors getting event coingecko values reached.`);
                         return;
@@ -161,8 +161,8 @@ async function fillEventsContextCoingecko() {
                 }
             }
         }
-    } catch(err) {
-        console.error(`[ERROR] Getting event coingecko: ${err.message}.`);
+    } catch(err: any) {
+        console.error(`[ERROR] Getting event coingecko: ${err?.message}.`);
     }
 }
 
@@ -234,9 +234,9 @@ async function fillEventsContexts(web3: Web3) {
                     }
                 });
                 countWorkOrKillEventsWithEmptyContext = await prisma.eventsETH.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`Limit of errors getting event position context reached.`);
                     return;
@@ -282,9 +282,9 @@ async function fillEventsBankValueContexts(web3: Web3) {
                     }
                 });
                 countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsETH.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`Can't update position context.bankValues for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`Can't update position context.bankValues for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`Limit of errors getting event position context.bankValues reached.`);
                     return;
@@ -304,6 +304,7 @@ async function countIncompleteWorkOrKillEvents() {
                 {
                     OR: [
                         { returnValues: { path: ['id'], equals: null } },
+                        { contextValues: { equals: null } },
                         { contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], equals: null } },
                         { contextValues: { path: ['bankValues', 'reservePool'], equals: null } },
                         { contextValues: { path: ['coingecko'], equals: null } },
@@ -351,7 +352,7 @@ async function main() {
                         ? await getBankPositionContext(web3, posId, singleEvent.blockNumber, parseInt(`${timestamp}`), irrelevantPositionHandler)
                         : null;
                 }
-            } catch(e) {
+            } catch(e: any) {
                 console.error('ERROR GETTING BLOCK TIMESTAMP', singleEvent.blockNumber, e);
             } finally {
                 try {
@@ -383,7 +384,7 @@ async function main() {
                         update: updateSingleEvent,
                         create: updateSingleEvent,
                     });   
-                } catch(err) {
+                } catch(err: any) {
                     console.error('ERROR!', err);
                 }
             }
@@ -400,8 +401,8 @@ async function main() {
                 update: { startBlock: range.fromBlock, endBlock: range.toBlock },
                 create: { id: syncEventRangeId, startBlock: range.fromBlock, endBlock: range.toBlock },
             });
-        } catch(e) {
-            console.error('Error saving error!', range, e, e.stack)
+        } catch(e: any) {
+            console.error('Error saving error!', range, e, e?.stack)
         }
     };
     await retryEventErrors(web3, onGetEventCallback, onGetErrorCallback);
@@ -420,29 +421,15 @@ async function main() {
     
     const incompleteCount = await countIncompleteWorkOrKillEvents();
     const doneWithoutErrors = (incompleteCount === 0 && getEventsBatchesWithErrors === 0);
-    if (doneWithoutErrors) {
-        console.log(`[DONE] Sync Events Without errors. Calculating periodic snapshots...`);
-        const countEventsWithoutPayload = await prisma.eventsETH.count({ where: {
-            AND: [
-                { event: { in: ['Work', 'Kill'] } },
-                {
-                    OR: [
-                        { timestamp: { equals: null } },
-                        { contextValues: { equals: null } }
-                    ],
-                }
-            ]
-        }});
-        if (countEventsWithoutPayload) {
-            throw new Error(`Can't calculate aggregation because there are ${countEventsWithoutPayload} events without complete payload.`);
-        }
-        await fillHistoricalSnapshots();
-        console.log(`[DONE] Snapshots.`);
-    } else {
-        console.error(`There are ${incompleteCount} events with missing returnValues, contextValues, positionId or timestamp!`);
+    if (!doneWithoutErrors) {
         console.log(`[DONE] Errors found: ${getEventsBatchesWithErrors}`);
+        console.error(`There are ${incompleteCount} events with missing returnValues, contextValues, positionId or timestamp!`);
+        throw new Error(`Can't calculate aggregation because there are ${incompleteCount} events without complete payload.`);
     }
-    return doneWithoutErrors;
+    console.log(`[DONE] Sync Events Without errors. Calculating periodic snapshots...`);
+    await fillHistoricalSnapshots();
+    console.log(`[DONE] Snapshots.`);
+    return true;
 }
 
 main().finally(() => {

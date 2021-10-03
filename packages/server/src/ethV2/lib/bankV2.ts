@@ -7,6 +7,7 @@ import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo, ICoinWi
 import { Ensure, IUnwrapPromise } from '../../lib/util';
 import { getPoolFromWToken } from './decodePool';
 import LP_TOKEN_ABI from '../../eth/abis/lp_token_abi.json';
+// import { getSafeboxInfoFromTokenKey } from './safeboxEth';
 
 export type ICoinWithInfoAndUsdPriceFilled = Ensure<ICoinWithInfoAndUsdPrice, 'info' | 'marketData'>;
 // export type IPositionWithSharesFilled = Ensure<IPositionWithShares, 'goblinPayload' | 'bankValues'> & { coingecko: ICoinWithInfoAndUsdPriceFilled; }
@@ -36,7 +37,7 @@ async function getPositionInfo(web3: Web3, positionId: number, atBlockN?: number
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const positionInfo: IBankV2Position = await contract.methods.getPositionInfo(positionId).call({}, atBlockN);
         return positionInfo;
-    } catch (err) {
+    } catch (err: any) {
         console.error(`[ERROR bankv2 positionInfo] ${JSON.stringify({ msg: err.message })}`)
         return null;
     }
@@ -47,7 +48,7 @@ export async function getNextPositionId(web3: Web3, atBlockN?: number): Promise<
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const positionInfo: string = await contract.methods.nextPositionId().call({}, atBlockN);
         return positionInfo;
-    } catch (err) {
+    } catch (err: any) {
         console.error(`[ERROR bankv2 nextPositionId] ${JSON.stringify({ msg: err.message })}`)
         return null;
     }
@@ -61,15 +62,40 @@ type IV2BankInfo = {
     totalDebt: string; //    uint256 :  104276367934065255839452
     totalShare: string; //   uint256 :  98312539647620654897431
 }
-export async function getBankInfo(web3: Web3, rewardAddress: string, atBlockN?: number): Promise<IV2BankInfo | null> {
+async function getBankInfo(web3: Web3, addr: string, atBlockN?: number): Promise<IV2BankInfo | null> {
     try {
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
-        const bankInfo: IV2BankInfo = await contract.methods.getBankInfo(rewardAddress).call({}, atBlockN);
+        const bankInfo: IV2BankInfo = await contract.methods.getBankInfo(addr).call({}, atBlockN);
         return bankInfo;
-    } catch (err) {
-        console.error(`[ERROR bankv2 getBankInfo] ${JSON.stringify({ msg: err.message, rewardAddress })}`)
+    } catch (err: any) {
+        console.error(`[ERROR bankv2 getBankInfo] ${JSON.stringify({ msg: err.message, addr })}`)
         return null;
     }
+}
+
+export function getTokensUsdValueFromLpAmount(
+    lpAmount: string,
+    lpPayload: NonNullable<IUnwrapPromise<ReturnType<typeof getlpPayload>>>,
+    coingecko: ReturnType<typeof getOnlyCoingeckoRelevantinfo>,
+) {
+    const lpTokenValue = new BigNumber(lpAmount).dividedBy(`1e${lpPayload.lpDecimals || 18}`);
+    const lpTotalSupply = new BigNumber(lpPayload.lpTotalSupply);
+    const lpShare = lpTokenValue.dividedBy(lpTotalSupply);
+
+    const { token0, token1 } = lpPayload;
+    const cgToken0Info = coingecko.find(cg => cg.address.toLowerCase() === token0.toLowerCase());
+    const cgToken1Info = coingecko.find(cg => cg.address.toLowerCase() === token1.toLowerCase());
+    if (!cgToken0Info || !cgToken1Info) {
+        throw new Error(`No token CG info! ${JSON.stringify({ token0, token1 }, null, 2)}`);
+    }
+    const token0PriceUsd = (cgToken0Info.marketData.market_data.current_price.usd) || 0;
+    const token1PriceUsd = (cgToken1Info.marketData.market_data.current_price.usd) || 0;
+    const token0Amount = lpShare.times(lpPayload.token0Reserve);
+    const token1Amount = lpShare.times(lpPayload.token1Reserve);
+    const token0AmountUsd = token0Amount.times(token0PriceUsd);
+    const token1AmountUsd = token1Amount.times(token1PriceUsd);
+    const amountUsd = token0AmountUsd.plus(token1AmountUsd)
+    return { amountUsd, token0Amount, token1Amount, token0AmountUsd, token1AmountUsd, token0PriceUsd, token1PriceUsd, lpTokenValue };
 }
 
 export async function getBankPositionContext(
@@ -77,25 +103,59 @@ export async function getBankPositionContext(
     positionId: number,
     atBlockN?: number,
     timestamp?: number | null,
+    eventName?: string,
 ) {
+    console.warn(`[GetContext ${eventName}] positionId: ${positionId} | ${timestamp ? new Date(timestamp*1000) : ''}`)
+    let isIrrelevant = false;
     const positionInfo = await getPositionInfo(web3, positionId, atBlockN);
-    if (!positionInfo) { return null; }
-    const poolInfo = await getPoolFromWToken(positionInfo.collToken, positionInfo.collId);
-
+    if (!positionInfo) {
+        console.warn(`[GetContext] no position info: ${positionId}`);
+        isIrrelevant = true;
+        return null;
+    }
+    
+    let poolInfo = getPoolFromWToken(positionInfo.collToken, positionInfo.collId);
+    if (!poolInfo
+        || (poolInfo?.exchange !== ExchangeNamesV2.Uniswap && poolInfo?.exchange !== ExchangeNamesV2.Sushiswap)
+    ) {
+        isIrrelevant = true;
+        poolInfo = null;
+    }
     let coingecko: ReturnType<typeof getOnlyCoingeckoRelevantinfo> | null = null;
-    if (timestamp && poolInfo) {
+    if (timestamp && poolInfo && !isIrrelevant) {
         coingecko = getOnlyCoingeckoRelevantinfo(
             await getCoinsInfoAndHistoryMarketData('ETH', poolInfo.tokens.map(address => ({ address, timestamp })))
         );
     }
-    let bankValues: IUnwrapPromise<ReturnType<typeof getBankInfo>> = null
-    if (poolInfo?.rewardAddress) {
-        bankValues = await getBankInfo(web3, poolInfo.rewardAddress, atBlockN);
+    const bankValues: IUnwrapPromise<ReturnType<typeof getBankInfo>>[] = [];
+    if (poolInfo && !isIrrelevant) {
+        for (const tok of poolInfo.tokens) {
+            const tokBankInfo = await getBankInfo(web3, tok, atBlockN);
+            if (tokBankInfo) {
+                bankValues.push(tokBankInfo);
+            }
+        }
     }
     let lpPayload: IUnwrapPromise<ReturnType<typeof getlpPayload>> = null
     if (coingecko) {
         lpPayload = await getlpPayload(web3,coingecko,poolInfo,positionInfo)
+        if (!lpPayload) {
+            console.warn(`[lpPayload] no values: ${positionId} | ${JSON.stringify({ poolInfo, positionInfo })} - ${atBlockN}`);
+        } 
     }
+    /*
+    // Related safeboxes info
+    const safeBoxes: IUnwrapPromise<ReturnType<typeof getSafeboxInfoFromTokenKey>>[] = [];
+    if (coingecko) {
+        for (const cg of coingecko) {
+            const symbol = (cg.info?.symbol || '');
+            const safeboxInfo = await getSafeboxInfoFromTokenKey(web3, symbol, atBlockN)
+            if (safeboxInfo) {
+                safeBoxes.push(safeboxInfo);
+            }
+        }
+    }
+    */
     const positionWithShares = {
         id: positionId,
         isActive: positionInfo.collateralSize !== "0",
@@ -105,6 +165,8 @@ export async function getBankPositionContext(
         timestamp,
         coingecko,
         lpPayload,
+        isIrrelevant,
+        // safeBoxes,
     };
     return positionWithShares;
 }
@@ -135,11 +197,11 @@ export async function getEvents(
     const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
     const eventProps: IBlockRange = { fromBlock, toBlock };
     const eventsReturned = await contract.getPastEvents(eventName, eventProps);
+    await onGetEventCallback(eventsReturned);
     if (eventsReturned.length) {
         console.log(`[BANK v2] Block range (${fromBlock} - ${toBlock}). Events: ${eventsReturned.length}`);
-        await onGetEventCallback(eventsReturned);
     } else {
-        console.log(`[BANK v2] Block range (${fromBlock} - ${toBlock})is empty of events.`);
+        console.log(`[BANK v2] Block range (${fromBlock} - ${toBlock}) is empty of events.`);
     }
 }
 
@@ -171,7 +233,7 @@ export async function getEventsInBatches(
                 fromBlockLoop = toBlockLoop + 1;
                 const nextBlockLoopEnd = fromBlockLoop + MAX_BLOCKS_TO_QUERY_EACH_REQ;
                 toBlockLoop = nextBlockLoopEnd > endBlock ? endBlock : nextBlockLoopEnd;
-            } catch (e) {
+            } catch (e: any) {
                 requestErrors++;
                 await onGetErrorCallback({ fromBlock: fromBlockLoop, toBlock: toBlockLoop }, e);
                 fromBlockLoop = toBlockLoop + 1;
@@ -183,7 +245,7 @@ export async function getEventsInBatches(
     } else {
         try {
             await getEvents(web3, eventName, onGetEventCallback, startingBlock, endBlock)
-        } catch (e) {
+        } catch (e: any) {
             requestErrors++;
             await onGetErrorCallback({ fromBlock: startingBlock, toBlock: endBlock }, e);
         } finally {
@@ -249,25 +311,37 @@ async function getlpPayload(
         const token1Reserve = new BigNumber(reserves._reserve1).dividedBy(`1e${token1MapInfo.decimals || 18}`);
 
         const lpShare = lpTokenValue.dividedBy(lpTotalSupply);
-        const token0Amount = token0Reserve.multipliedBy(lpShare);
-        const token1Amount = token1Reserve.multipliedBy(lpShare);
+        
+        const token0Amount = lpShare.times(token0Reserve);
+        const token1Amount = lpShare.times(token1Reserve);
+        const token0AmountUsd = token0Amount.times(token0PriceUsd);
+        const token1AmountUsd = token1Amount.times(token1PriceUsd);
+        const lpValueUsd = token0AmountUsd.plus(token1AmountUsd);
         const token0UsdReserveValue = token0Amount.multipliedBy(token0PriceUsd);
         const token1UsdReserveValue = token1Amount.multipliedBy(token1PriceUsd);
+        
         const totalPoolReserveValue = token0UsdReserveValue.plus(token1UsdReserveValue);
-        const lpTokenValueUsd = lpTokenValue.dividedBy(totalPoolReserveValue).multipliedBy(lpTotalSupply);
 
         return {
+            token0,
+            token1,
+            token0Reserve: token0Reserve.toString(),
+            token1Reserve: token1Reserve.toString(),
+            lpDecimals: decimals || 18,
+            lpTotalSupply: lpTotalSupply.toString(),
             token0Amount: token0Amount.toString(),
             token1Amount: token1Amount.toString(),
             lpTokenValue: lpTokenValue.toString(),
             token0UsdReserveValue: token0UsdReserveValue.toString(),
             token1UsdReserveValue: token1UsdReserveValue.toString(),
-            lpTokenValueUsd: lpTokenValueUsd.toString(),
+            token0AmountUsd: token0AmountUsd.toString(),
+            token1AmountUsd: token1AmountUsd.toString(),
+            lpValueUsd: lpValueUsd.toString(),
             totalPoolReserveValue: totalPoolReserveValue.toString(),
             reserves,
         };
-    } catch (err) {
-        console.error(`[ERROR getlpPayload] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getlpPayload] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }

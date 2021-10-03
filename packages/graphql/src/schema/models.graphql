@@ -34,3 +34,17 @@ type ETHEvent {
   timestamp: Int
   updatedAt: Date!
 }
+
+type ETHEventV2 {
+  logIndex: Int!
+  transactionHash: String!
+  transactionIndex: Int!
+  address: String!
+  blockNumber: Int!
+  event: String!
+  returnValues: JSON
+  contextValues: JSON
+  positionId: Int
+  timestamp: Int
+  updatedAt: Date!
+}

@@ -46,7 +46,7 @@ async function retryEventErrors(
                 await prisma.eventErrorsBSC.delete({
                     where: { id: evErr.id }
                 });
-            } catch(delErr) {
+            } catch(delErr: any) {
                 console.error('Delete event error failed: ', delErr);
             } finally {
                 await onDone(ed);
@@ -95,9 +95,9 @@ async function fillEventsTimestamps(web3: Web3) {
                     }
                 });
                 count = await prisma.eventsBSC.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`Can't update timestamp for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`Can't update timestamp for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`Limit of errors getting event timestamp reached.`);
                     return;
@@ -157,9 +157,9 @@ async function fillEventsContextCoingecko() {
                         // query should guarantee this never happens but, just a check for TS
                         throw new Error('Ups!');
                     }
-                } catch(err) {
+                } catch(err: any) {
                     errorsCount++;
-                    console.error(`Can't update coingecko values for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                    console.error(`Can't update coingecko values for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                     if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                         console.error(`Limit of errors getting event coingecko values reached.`);
                         return;
@@ -168,8 +168,8 @@ async function fillEventsContextCoingecko() {
                 }
             }
         }
-    } catch(err) {
-        console.error(`[ERROR] Getting event coingecko: ${err.message}.`);
+    } catch(err: any) {
+        console.error(`[ERROR] Getting event coingecko: ${err?.message}.`);
     }
 }
 
@@ -214,9 +214,9 @@ async function fillEventsContexts(web3: Web3) {
                     }
                 });
                 countWorkOrKillEventsWithEmptyContext = await prisma.eventsBSC.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`Limit of errors getting event position context reached.`);
                     return;
@@ -261,9 +261,9 @@ async function fillEventsBankValueContexts(web3: Web3) {
                     }
                 });
                 countWorkOrKillEventsWithEmptyBankValues = await prisma.eventsBSC.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`Can't update position context.bankValues for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`Can't update position context.bankValues for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`Limit of errors getting event position context.bankValues reached.`);
                     return;
@@ -326,7 +326,7 @@ async function main() {
                         parseInt(`${timestamp}`),
                     );
                 }
-            } catch(e) {
+            } catch(e: any) {
                 console.error('ERROR GETTING BLOCK TIMESTAMP', singleEvent.blockNumber, e);
             } finally {
                 try {
@@ -357,7 +357,7 @@ async function main() {
                         update: updateSingleEvent,
                         create: updateSingleEvent,
                     });   
-                } catch(err) {
+                } catch(err: any) {
                     console.error('ERROR!', err);
                 }
             }
@@ -374,8 +374,8 @@ async function main() {
                 update: { startBlock: range.fromBlock, endBlock: range.toBlock },
                 create: { id: syncEventRangeId, startBlock: range.fromBlock, endBlock: range.toBlock },
             });
-        } catch(e) {
-            console.error('Error saving error!', range, e, e.stack)
+        } catch(e: any) {
+            console.error('Error saving error!', range, e, e?.stack)
         }
     };
     await retryEventErrors(web3, onGetEventCallback, onGetErrorCallback);

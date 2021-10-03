@@ -226,7 +226,7 @@ async function fillPeriodIndicators(startOfPeriod: Date, state: IAggregationStat
             update: { indicators, lastEvent },
             create: { timestamp, indicators, lastEvent },
         });
-    } catch(err) {
+    } catch(err: any) {
         console.error(err);
     }
 }

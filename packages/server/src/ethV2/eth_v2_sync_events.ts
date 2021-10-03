@@ -82,9 +82,9 @@ async function fillEventsTimestamps(web3: Web3) {
                     }
                 });
                 count = await prisma.eventsV2ETH.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`[ETH v2] Can't update timestamp for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`[ETH v2] Can't update timestamp for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`[ETH v2] Limit of errors getting event timestamp reached.`);
                     return;
@@ -153,9 +153,9 @@ async function fillEventsContextCoingecko() {
                         // query should guarantee this never happens but, just a check for TS
                         throw new Error('Ups!');
                     }
-                } catch(err) {
+                } catch(err: any) {
                     errorsCount++;
-                    console.error(`Can't update coingecko values for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                    console.error(`Can't update coingecko values for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                     if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                         console.error(`Limit of errors getting event coingecko values reached.`);
                         return;
@@ -164,8 +164,8 @@ async function fillEventsContextCoingecko() {
                 }
             }
         }
-    } catch(err) {
-        console.error(`[ERROR] Getting event coingecko: ${err.message}.`);
+    } catch(err: any) {
+        console.error(`[ERROR] Getting event coingecko: ${err?.message}.`);
     }
 }
 
@@ -183,7 +183,9 @@ async function fillEventsContexts(web3: Web3) {
                 { returnValues: { path: ['positionId'], not: null } },
                 { OR: [
                     { contextValues: { equals: null } },
-                    // { contextValues: { path: ['poolInfo'], equals: null } },
+                    { contextValues: { path: ['poolInfo'], equals: null } },
+                    { contextValues: { path: ['lpPayload'], equals: null } },
+                    { contextValues: { path: ['coingecko'], equals: null } },
                 ]},
                 { irrelevant: false },
             ]
@@ -196,10 +198,10 @@ async function fillEventsContexts(web3: Web3) {
         console.log(`[ETH v2] Updating ${eventsWithEmptyContext.length} Kill or Work events with empty context.`);
         for (const ev of eventsWithEmptyContext) {
             try {
-                const posId = (ev.returnValues as any)?.id;
+                const posId = (ev.returnValues as any).positionId;
                 let irrelevant = false; // TODO:! handle irrelevant positions
                 const contextValues = (posId) 
-                    ? (await getBankPositionContext(web3, posId, ev.blockNumber, ev.timestamp))
+                    ? (await getBankPositionContext(web3, posId, ev.blockNumber, ev.timestamp, ev.event))
                     : null;
                 if (!contextValues && !irrelevant) {
                     throw new Error(`[ETH v2] Can't get event position context. ev: ${JSON.stringify(ev, null, 2)}`);
@@ -218,9 +220,9 @@ async function fillEventsContexts(web3: Web3) {
                     }
                 });
                 countWorkOrKillEventsWithEmptyContext = await prisma.eventsV2ETH.count(filterQuery);
-            } catch(err) {
+            } catch(err: any) {
                 errorsCount++;
-                console.error(`[ETH v2] Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err.message}`);
+                console.error(`[ETH v2] Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
                 if (errorsCount >= MAX_ERRORS_COUNT_ALLOWED) {
                     console.error(`[ETH v2] Limit of errors getting event position context reached.`);
                     return;
@@ -229,6 +231,35 @@ async function fillEventsContexts(web3: Web3) {
             }
         }
     }
+}
+
+// Validate all work or kill events are filled correctly
+async function countIncompleteEvents() {
+    const incompleteEventsCount = await prisma.eventsETH.count({
+        where: {
+            AND: [
+                { OR: [
+                    { event: 'Borrow' },
+                    { event: 'Repay' },
+                    { event: 'PutCollateral'},
+                    { event: 'TakeCollateral'},
+                    { event: 'Liquidate'},
+                ] },
+                {
+                    OR: [
+                        { returnValues: { path: ['positionId'], equals: null } },
+                        { contextValues: { equals: null } },
+                        { contextValues: { path: ['poolInfo'], equals: null } },
+                        { contextValues: { path: ['lpPayload'], equals: null } },
+                        { contextValues: { path: ['coingecko'], equals: null } },
+                        { timestamp: { equals: null } },
+                    ]
+                },
+                { irrelevant: false },
+            ]
+        }
+    });
+    return (incompleteEventsCount);
 }
 
 async function main() {
@@ -249,9 +280,7 @@ async function main() {
             // TODO:!
             // let contextValues: IPositionWithShares | null = null;
             let contextValues: IUnwrapPromise<ReturnType<typeof getBankPositionContext>> = null;
-            let irrelevant = false;
             try {
-                // TODO:! handle irrelevant positions
                 timestamp = (await web3.eth.getBlock(singleEvent.blockNumber)).timestamp;
                 if (
                     (EVENTS_TO_CHECK.some(ev => ev === singleEvent.event))
@@ -260,7 +289,7 @@ async function main() {
                  ) {
                     const posId = singleEvent.returnValues?.positionId;
                     contextValues = (posId)
-                        ? await getBankPositionContext(web3, posId, singleEvent.blockNumber, parseInt(`${timestamp}`))
+                        ? await getBankPositionContext(web3, posId, singleEvent.blockNumber, parseInt(`${timestamp}`), singleEvent.event)
                         : null;
                 }
             } catch(e) {
@@ -282,7 +311,7 @@ async function main() {
                         returnValues: singleEvent.returnValues,
                         contextValues,
                         positionId,
-                        irrelevant,
+                        irrelevant: contextValues?.isIrrelevant || false,
                         timestamp: timestamp ? parseInt(`${timestamp}`) : null,
                     };
                     await prisma.eventsV2ETH.upsert({
@@ -312,8 +341,8 @@ async function main() {
                 update: { startBlock: range.fromBlock, endBlock: range.toBlock },
                 create: { id: syncEventRangeId, startBlock: range.fromBlock, endBlock: range.toBlock },
             });
-        } catch(e) {
-            console.error('[ETH v2] Error saving error!', range, e, e.stack)
+        } catch(e: any) {
+            console.error('[ETH v2] Error saving error!', range, e, e?.stack)
         }
     };
     await retryEventErrors(web3, onGetEventCallback, onGetErrorCallback);
@@ -328,9 +357,20 @@ async function main() {
     await fillEventsTimestamps(web3);
     await fillEventsContexts(web3);
     await fillEventsContextCoingecko();
+
+    const incompleteCount = await countIncompleteEvents();
+    const doneWithoutErrors = (incompleteCount === 0 && getEventsBatchesWithErrors === 0);
     
-    console.log(`[DONE ETH v2] Sync Events. Errors: ${getEventsBatchesWithErrors}`);
-    // TODOO! first countIncompleteWorkOrKillEvents then fill historical snapshots here!
+    if (!doneWithoutErrors) {
+        console.log(`[DONE ETH v2] Errors found: ${getEventsBatchesWithErrors}`);
+        console.error(`ETH v2 There are ${incompleteCount} events with missing context!`);
+        throw new Error(`ETH v2 Can't calculate aggregation because there are ${incompleteCount} events without complete payload.`);
+    }
+    console.log(`[DONE ETH v2] Sync Events Without errors. Calculating periodic snapshots...`);
+
+    // NOTE: TODO: v2 aggregation is a WIP
+    // await fillHistoricalSnapshots();
+    console.log(`[DONE ETH v2] Snapshots.`);
     return true;
 }
 

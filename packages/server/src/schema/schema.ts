@@ -27,6 +27,7 @@ export const resolvers: IRequiredResolvers = {
     // ========================================
     BSCEvent: {},
     ETHEvent: {},
+    ETHEventV2: {},
     // ========================================
     //             Scalar resolvers
     // ========================================
