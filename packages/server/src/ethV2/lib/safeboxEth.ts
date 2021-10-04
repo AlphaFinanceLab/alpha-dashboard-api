@@ -6,7 +6,7 @@ import { AbiItem } from 'web3-utils';
 import CTOKEN_ABI from '../abis/ctoken_abi.json';
 
 // V2 Safe Boxes -> lending e.g. poolSize, utilization
-const SAFE_BOXES = {
+export const SAFE_BOXES = {
     WETH: {
         address: '0xeEa3311250FE4c3268F8E684f7C87A82fF183Ec1',
         cToken: '0x41c84c0e2ee0b740cf0d31f63f3b6f627dc6b393',
@@ -92,21 +92,21 @@ const SAFE_BOXES = {
 // }
 
 export async function getSafeboxInfoFromTokenKey(web3: Web3, tokenSymbol: string, atBlockN?: number) {
-    const safeBoxKey = tokenSymbol.toUpperCase();
+    const symbol = tokenSymbol.toUpperCase() as keyof typeof SAFE_BOXES;
     try {
-        if (Object.keys(SAFE_BOXES).indexOf(safeBoxKey) === -1) {
+        if (Object.keys(SAFE_BOXES).indexOf(symbol) === -1) {
             throw new Error(`[ETH v2] Safebox invalid token key: ${tokenSymbol}`);
         }
-        const safeBox = SAFE_BOXES[safeBoxKey as keyof typeof SAFE_BOXES];
+        const safeBox = SAFE_BOXES[symbol];
         const contractCT = new web3.eth.Contract((CTOKEN_ABI as unknown) as AbiItem, safeBox.cToken);
         const decimals: string = await contractCT.methods.decimals().call({}, atBlockN);
         const totalBorrows: string = await contractCT.methods.totalBorrows().call({}, atBlockN);
         const totalSupply: string = await contractCT.methods.totalSupply().call({}, atBlockN);
         const supplyRatePerBlock: string = await contractCT.methods.supplyRatePerBlock().call({}, atBlockN);
         const balanceOf: string = await contractCT.methods.balanceOf(safeBox.address).call({}, atBlockN);
-        return { symbol: safeBoxKey, balanceOf, decimals, totalBorrows, totalSupply, supplyRatePerBlock };
+        return { symbol, balanceOf, decimals, totalBorrows, totalSupply, supplyRatePerBlock };
     } catch (err: any) {
-        console.error(`[ERROR getSafeboxInfoFromTokenKey] ${JSON.stringify({ safeBoxKey, atBlockN, msg: err?.message })}`)
+        console.error(`[ERROR getSafeboxInfoFromTokenKey] ${JSON.stringify({ symbol, atBlockN, msg: err?.message })}`)
         return null;
     }
 }

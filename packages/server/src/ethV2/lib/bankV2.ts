@@ -7,7 +7,7 @@ import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo, ICoinWi
 import { Ensure, IUnwrapPromise } from '../../lib/util';
 import { getPoolFromWToken } from './decodePool';
 import LP_TOKEN_ABI from '../../eth/abis/lp_token_abi.json';
-// import { getSafeboxInfoFromTokenKey } from './safeboxEth';
+import { getSafeboxInfoFromTokenKey } from './safeboxEth';
 
 export type ICoinWithInfoAndUsdPriceFilled = Ensure<ICoinWithInfoAndUsdPrice, 'info' | 'marketData'>;
 // export type IPositionWithSharesFilled = Ensure<IPositionWithShares, 'goblinPayload' | 'bankValues'> & { coingecko: ICoinWithInfoAndUsdPriceFilled; }
@@ -143,19 +143,19 @@ export async function getBankPositionContext(
             console.warn(`[lpPayload] no values: ${positionId} | ${JSON.stringify({ poolInfo, positionInfo })} - ${atBlockN}`);
         } 
     }
-    /*
     // Related safeboxes info
-    const safeBoxes: IUnwrapPromise<ReturnType<typeof getSafeboxInfoFromTokenKey>>[] = [];
+    const safeBoxes: NonNullable<IUnwrapPromise<ReturnType<typeof getSafeboxInfoFromTokenKey>>>[] = [];
     if (coingecko) {
         for (const cg of coingecko) {
-            const symbol = (cg.info?.symbol || '');
-            const safeboxInfo = await getSafeboxInfoFromTokenKey(web3, symbol, atBlockN)
+            if (!cg.info) {
+                throw new Error(`[ETH v2] There is a safebox event with no coingecko info. Data: ${JSON.stringify({ positionId, cg })}`);
+            }
+            const safeboxInfo = await getSafeboxInfoFromTokenKey(web3, cg.info.symbol.toUpperCase(), atBlockN)
             if (safeboxInfo) {
                 safeBoxes.push(safeboxInfo);
             }
         }
     }
-    */
     const positionWithShares = {
         id: positionId,
         isActive: positionInfo.collateralSize !== "0",
@@ -166,7 +166,7 @@ export async function getBankPositionContext(
         coingecko,
         lpPayload,
         isIrrelevant,
-        // safeBoxes,
+        safeBoxes,
     };
     return positionWithShares;
 }

@@ -2,30 +2,26 @@ import { eachHourOfInterval, startOfHour, endOfHour, getUnixTime } from 'date-fn
 import { BigNumber } from "bignumber.js";
 import { PrismaClient, EventsV2ETH } from '@prisma/client';
 import {
-    getBankPositionContext, getTokensUsdValueFromLpAmount
+    getBankPositionContext, getTokensUsdValueFromLpAmount, BANK_CONTRACT_DECIMALS
 } from './bankV2';
 import { Ensure, IUnwrapPromise } from '../../lib/util';
+import { SAFE_BOXES } from './safeboxEth';
 
 const prisma = new PrismaClient();
 
-// type ITokenCoingeckoInfo = { coingeckoId: string; amount: BigNumber; usdPrice: number; usdValue: BigNumber; };
-// type IAggregationPoolInfo = {
-//     address: string;
-//     usdTotalValue: BigNumber;
-//     token0: ITokenCoingeckoInfo;
-//     token1: ITokenCoingeckoInfo;
-//     goblin: string;
-// }
-// type ITokenCoingeckoClonedInfo = { coingeckoId: string; amount: string; usdPrice: number; usdValue: string; };
-// type IAggregationPoolClonedInfo = {
-//     address: string;
-//     usdTotalValue: string;
-//     token0: ITokenCoingeckoClonedInfo;
-//     token1: ITokenCoingeckoClonedInfo;
-//     goblin: string;
-// }
+type IAggregationState = ReturnType<typeof getInitialAggregationState>;
+type IAssetValues = null | {
+    totalDebt: BigNumber;
+    totalShare: BigNumber;
+    reserve: BigNumber;
+    utilization: BigNumber;
+    APR: BigNumber;
+    APY: BigNumber;
+};
 
-type IAggregationState = IUnwrapPromise<ReturnType<typeof getInitialAggregationState>>;
+// NOTE: Assume 1 block = 15 sec
+const TOTAL_BLOCKS_PER_YEAR = 365 * 24 * 60 * 60 / 15;
+
 const getInitialAggregationState = () => ({
     positions: {
         overTime: 0,
@@ -36,23 +32,21 @@ const getInitialAggregationState = () => ({
         refilled: 0,
         refilledValue: new BigNumber(0),
     },
-    // bankValues: {
-    //     totalETH: new BigNumber(0),
-    //     glbDebtVal: new BigNumber(0),
-    //     glbDebtShare: new BigNumber(0),
-    //     reservePool: new BigNumber(0),
-    // },
-    // ETH: {
-    //     lendingValue: new BigNumber(0),
-    //     utilizationRate: new BigNumber(0),
-    //     lendingAPY: new BigNumber(0),
-    // },
-    // loans: {
-    //     number: 0,
-    //     value: new BigNumber(0),
-    // },
-    // poolsInfo: ({} as { [addr: string]: IAggregationPoolInfo }),
-    // tvl: new BigNumber(0),
+    assets: {
+        WETH: (null as IAssetValues),
+        DAI: (null as IAssetValues),
+        USDT: (null as IAssetValues),
+        USDC: (null as IAssetValues),
+        YFI: (null as IAssetValues),
+        DPI: (null as IAssetValues),
+        SNX: (null as IAssetValues),
+        USD: (null as IAssetValues),
+        LINK: (null as IAssetValues),
+        WBTC: (null as IAssetValues),
+        UNI: (null as IAssetValues),
+        SUSHI: (null as IAssetValues),
+    },
+    tvl: new BigNumber(0),
 });
 
 const getLastAggregationStateAndCursor = async () => {
@@ -61,26 +55,6 @@ const getLastAggregationStateAndCursor = async () => {
         return null;
     }
     const indicators = lastBlockEvent.indicators as ReturnType<typeof deepCloneState>;
-    // const poolsInfo: { [addr: string]: IAggregationPoolInfo } = {};
-    // for (const [poolKey, info] of Object.entries(indicators.poolsInfo)) {
-    //     poolsInfo[poolKey] = {
-    //         address: info.address,
-    //         usdTotalValue: new BigNumber(info.usdTotalValue),
-    //         goblin: info.goblin,
-    //         token0: {
-    //             coingeckoId: info.token0.coingeckoId,
-    //             usdPrice: info.token0.usdPrice,
-    //             usdValue: new BigNumber(info.token0.usdValue),
-    //             amount: new BigNumber(info.token0.amount), // decimals
-    //         },
-    //         token1: {
-    //             coingeckoId: info.token1.coingeckoId,
-    //             usdPrice: info.token1.usdPrice,
-    //             usdValue: new BigNumber(info.token1.usdValue),
-    //             amount: new BigNumber(info.token1.amount), // decimals
-    //         },
-    //     };
-    // }
     const state = {
         positions: {
             overTime: indicators.positions.overTime,
@@ -91,52 +65,50 @@ const getLastAggregationStateAndCursor = async () => {
             refilled: indicators.positions.refilled,
             refilledValue: new BigNumber(indicators.positions.refilledValue),
         },
-        // bankValues: {
-        //     totalETH: new BigNumber(indicators.bankValues.totalETH),
-        //     glbDebtVal: new BigNumber(indicators.bankValues.glbDebtVal),
-        //     glbDebtShare: new BigNumber(indicators.bankValues.glbDebtShare),
-        //     reservePool: new BigNumber(indicators.bankValues.reservePool),
-        // },
-        // ETH: {
-        //     lendingValue: new BigNumber(indicators.ETH.lendingValue),
-        //     utilizationRate: new BigNumber(indicators.ETH.utilizationRate),
-        //     lendingAPY: new BigNumber(indicators.ETH.lendingAPY),
-        // },
-        // loans: {
-        //     number: indicators.loans.number,
-        //     value: new BigNumber(indicators.loans.value),
-        // },
-        // tvl: new BigNumber(indicators.tvl),
-        // poolsInfo,
+        assets: {
+            WETH: instantiateAssetValue(indicators.assets.WETH),
+            DAI: instantiateAssetValue(indicators.assets.DAI),
+            USDT: instantiateAssetValue(indicators.assets.USDT),
+            USDC: instantiateAssetValue(indicators.assets.USDC),
+            YFI: instantiateAssetValue(indicators.assets.YFI),
+            DPI: instantiateAssetValue(indicators.assets.DPI),
+            SNX: instantiateAssetValue(indicators.assets.SNX),
+            USD: instantiateAssetValue(indicators.assets.USD),
+            LINK: instantiateAssetValue(indicators.assets.LINK),
+            WBTC: instantiateAssetValue(indicators.assets.WBTC),
+            UNI: instantiateAssetValue(indicators.assets.UNI),
+            SUSHI: instantiateAssetValue(indicators.assets.SUSHI),
+        },
+        tvl: new BigNumber(indicators.tvl),
     };
     const lastEvent = (lastBlockEvent.lastEvent as ILastIndicatorEvent);
     const eventCursor: ICurrentEvent = { blockNumber: lastEvent.blockNumber, logIndex: lastEvent.logIndex };
     return { eventCursor, state };
 };
 
-// const deepClonePoolsInfoState = (pis: IAggregationState['poolsInfo']) => {
-//     const poolsInfoClone: { [addr: string]: IAggregationPoolClonedInfo } = {};
-//     for (const poolInfo of Object.values(pis)) {
-//         poolsInfoClone[poolInfo.address] = {
-//             address: poolInfo.address,
-//             goblin: poolInfo.goblin,
-//             token0: {
-//                 coingeckoId: poolInfo.token0.coingeckoId,
-//                 amount: poolInfo.token0.amount.toString(),
-//                 usdPrice: poolInfo.token0.usdPrice,
-//                 usdValue: poolInfo.token0.usdValue.toString(),
-//             },
-//             token1: {
-//                 coingeckoId: poolInfo.token1.coingeckoId,
-//                 amount: poolInfo.token1.amount.toString(),
-//                 usdPrice: poolInfo.token1.usdPrice,
-//                 usdValue: poolInfo.token1.usdValue.toString(),
-//             },
-//             usdTotalValue: poolInfo.usdTotalValue.toString(),
-//         }
-//     }
-//     return poolsInfoClone;
-// }
+const deepCloneAssetValue = (av: IAssetValues) => {
+    if (!av) { return null; }
+    return {
+        totalDebt: av.totalDebt.toString(),
+        totalShare: av.totalShare.toString(),
+        reserve: av.reserve.toString(),
+        utilization: av.utilization.toString(),
+        APR: av.APR.toString(),
+        APY: av.APY.toString(),
+    };
+};
+
+const instantiateAssetValue = (av: ReturnType<typeof deepCloneAssetValue>): IAssetValues => {
+    if (!av) { return null; }
+    return {
+        totalDebt: new BigNumber(av.totalDebt),
+        totalShare: new BigNumber(av.totalShare),
+        reserve: new BigNumber(av.reserve),
+        utilization: new BigNumber(av.utilization),
+        APR: new BigNumber(av.APR),
+        APY: new BigNumber(av.APY),
+    };
+};
 
 const deepCloneState = (s: IAggregationState) => ({
     positions: {
@@ -148,32 +120,21 @@ const deepCloneState = (s: IAggregationState) => ({
         refilled: s.positions.refilled,
         refilledValue: s.positions.refilledValue.toString(),
     },
-    /*
-    bankValues: {
-        totalETH: s.bankValues.totalETH.toString(), // decimals
-        glbDebtVal: s.bankValues.glbDebtVal.toString(), // decimals
-        glbDebtShare: s.bankValues.glbDebtShare.toString(), // decimals
-        reservePool: s.bankValues.reservePool.toString(), // decimals
-    },
-    ETH: { // contextValues.bankValues
-        lendingValue: s.ETH.lendingValue.toString(), // is totalETH // decimals
-        utilizationRate: s.ETH.utilizationRate.toString(), // is glbDebtVal / totalETH + reservePool // decimals
-        lendingAPY: s.ETH.lendingAPY.toString(), // https://alphafinancelab.gitbook.io/alpha-homora/interest-rate-model // decimals
-    },
-    loans: {
-        number: s.loans.number,
-        value: s.loans.value.toString(),
+    assets: {
+        WETH: deepCloneAssetValue(s.assets.WETH),
+        DAI: deepCloneAssetValue(s.assets.DAI),
+        USDT: deepCloneAssetValue(s.assets.USDT),
+        USDC: deepCloneAssetValue(s.assets.USDC),
+        YFI: deepCloneAssetValue(s.assets.YFI),
+        DPI: deepCloneAssetValue(s.assets.DPI),
+        SNX: deepCloneAssetValue(s.assets.SNX),
+        USD: deepCloneAssetValue(s.assets.USD),
+        LINK: deepCloneAssetValue(s.assets.LINK),
+        WBTC: deepCloneAssetValue(s.assets.WBTC),
+        UNI: deepCloneAssetValue(s.assets.UNI),
+        SUSHI: deepCloneAssetValue(s.assets.SUSHI),
     },
     tvl: s.tvl.toString(),
-    poolsInfo: deepClonePoolsInfoState(s.poolsInfo),
-    */
-
-    // pools: {
-    //     "ALPHA/ibETH": {
-    //         apy: s.pools['ALPHA/ibETH'].apy,
-    //         volume: s.pools['ALPHA/ibETH'].volume.toString(),
-    //     },
-    // },
 });
 
 // Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval)
@@ -210,7 +171,6 @@ async function *batchedEventsAfterCurrent({ current }: IEventsPaginator) {
     }
 }
 
-// const SNAPSHOTS_CACHE: {[unixTimestamp: number]: IAggregationState; } = {}
 type ILastIndicatorEvent = { logIndex: number; blockNumber: number; };
 async function fillPeriodIndicators(startOfPeriod: Date, state: IAggregationState, lastEvent: ILastIndicatorEvent) {
     const timestamp = getUnixTime(startOfPeriod);
@@ -312,14 +272,40 @@ export async function fillHistoricalSnapshots() {
                     GLOBAL_STATE.positions.liquidatedValue = GLOBAL_STATE.positions.liquidatedValue.plus(
                         amountValues.amountUsd
                     );
-                }
-                // else if (ev.event === 'TakeCollateral') {
+                } // else if (ev.event === 'TakeCollateral') {
                 //     // TakeCollateral [id, token, amount, caller, positionId]
                 // } else if (ev.event === 'Borrow') {
                 //     // Borrow [share, token, amount, caller, positionId]
                 // } else if (ev.event === 'Repay') {
                 //     // Repay [share, token, amount, caller, positionId]
                 // }
+
+                // Bank vaults values
+                for (const sb of ev.contextValues.safeBoxes) {
+                    // const currAssetVals = GLOBAL_STATE.assets[sb.symbol]
+                    const safeBoxMapInfo = SAFE_BOXES[sb.symbol];
+                    const bankInfo = ev.contextValues.bankValues.find(b => (
+                        b?.cToken.toLowerCase() === safeBoxMapInfo.cToken.toLowerCase())
+                    );
+                    if (!bankInfo) {
+                        throw new Error(`[ETH v2] No bank info for cToken!. pid: ${ev.positionId}, ${ev.transactionHash} ${ev.logIndex}. Data: ${JSON.stringify(sb)}`);
+                    }
+                    const totalBorrows = new BigNumber(sb.totalBorrows).dividedBy(`1e${sb.decimals}`);
+                    // NOTE: confirm total loanable calc
+                    const totalLoanable = new BigNumber(sb.balanceOf).dividedBy(`1e${sb.decimals}`);
+                    const APR = new BigNumber(sb.supplyRatePerBlock).multipliedBy(TOTAL_BLOCKS_PER_YEAR).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`);
+                    const APY = ((APR.dividedBy(365)).plus(1)).pow(365).minus(1)
+                    GLOBAL_STATE.assets[sb.symbol] = {
+                        totalDebt: new BigNumber(bankInfo.totalDebt).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
+                        totalShare: new BigNumber(bankInfo.totalShare).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
+                        reserve: new BigNumber(bankInfo.reserve).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
+                        utilization: totalBorrows.dividedBy(totalBorrows.plus(totalLoanable)),
+                        APR,
+                        APY,
+                    };
+                }
+                // TODO: confirm TVL calculation
+                // GLOBAL_STATE.tvl = 
             } else {
                 throw new Error(`[ETH v2] Event without positionId should never happen!. pid: ${ev.positionId}, ${ev.transactionHash} ${ev.logIndex}`);
             }
