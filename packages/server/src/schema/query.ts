@@ -84,4 +84,16 @@ export const Query: RequiredQueryResolvers = {
       });
       return ev;
     },
+    async ethV2Indicators(_obj, args, _ctx) {
+      const indicators = await prisma.indicatorsV2ETH.findMany({
+        where: {
+          AND: [
+            { timestamp: { gte: args.from } },
+            { timestamp: { lte: args.to } }
+          ]
+        },
+        take: 200,
+      });
+      return indicators;
+    },
 };

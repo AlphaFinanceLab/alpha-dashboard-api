@@ -251,7 +251,7 @@ export async function fillHistoricalSnapshots() {
                     GLOBAL_STATE.positions.refilled++;
                     // TODO: need to confirm the refilled usd value calc is ok
                     if (!ev.contextValues.lpPayload || !ev.contextValues.coingecko) {
-                        throw new Error(`[ETH v2] PutCollateral with no lpPayload or coingecko info should not happen.`);
+                        throw new Error(`[ETH v2] PutCollateral with no lpPayload or coingecko info should not happen. ${JSON.stringify({ ev })}`);
                     }
                     const amountValues = getTokensUsdValueFromLpAmount(
                         (ev.returnValues as any).amount, ev.contextValues.lpPayload, ev.contextValues.coingecko
@@ -264,7 +264,7 @@ export async function fillHistoricalSnapshots() {
                     GLOBAL_STATE.positions.liquidated++;
                     // TODO: need to confirm the liquidated value is the lpValueUsd
                     if (!ev.contextValues.lpPayload || !ev.contextValues.coingecko) {
-                        throw new Error(`[ETH v2] PutCollateral with no lpPayload or coingecko info should not happen.`);
+                        throw new Error(`[ETH v2] Liquidate with no lpPayload or coingecko info should not happen. ${JSON.stringify({ ev })}`);
                     }
                     const amountValues = getTokensUsdValueFromLpAmount(
                         (ev.returnValues as any).amount, ev.contextValues.lpPayload, ev.contextValues.coingecko
@@ -283,26 +283,27 @@ export async function fillHistoricalSnapshots() {
                 // Bank vaults values
                 for (const sb of ev.contextValues.safeBoxes) {
                     // const currAssetVals = GLOBAL_STATE.assets[sb.symbol]
-                    const safeBoxMapInfo = SAFE_BOXES[sb.symbol];
-                    const bankInfo = ev.contextValues.bankValues.find(b => (
-                        b?.cToken.toLowerCase() === safeBoxMapInfo.cToken.toLowerCase())
-                    );
-                    if (!bankInfo) {
-                        throw new Error(`[ETH v2] No bank info for cToken!. pid: ${ev.positionId}, ${ev.transactionHash} ${ev.logIndex}. Data: ${JSON.stringify(sb)}`);
-                    }
                     const totalBorrows = new BigNumber(sb.totalBorrows).dividedBy(`1e${sb.decimals}`);
                     // NOTE: confirm total loanable calc
                     const totalLoanable = new BigNumber(sb.balanceOf).dividedBy(`1e${sb.decimals}`);
                     const APR = new BigNumber(sb.supplyRatePerBlock).multipliedBy(TOTAL_BLOCKS_PER_YEAR).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`);
-                    const APY = ((APR.dividedBy(365)).plus(1)).pow(365).minus(1)
-                    GLOBAL_STATE.assets[sb.symbol] = {
-                        totalDebt: new BigNumber(bankInfo.totalDebt).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
-                        totalShare: new BigNumber(bankInfo.totalShare).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
-                        reserve: new BigNumber(bankInfo.reserve).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
-                        utilization: totalBorrows.dividedBy(totalBorrows.plus(totalLoanable)),
-                        APR,
-                        APY,
-                    };
+                    const APY = ((APR.dividedBy(365)).plus(1)).pow(365).minus(1);
+                    const safeBoxMapInfo = SAFE_BOXES[sb.symbol];
+                    const bankInfo = ev.contextValues.bankValues.find(b => (
+                        b?.cToken.toLowerCase() === safeBoxMapInfo.cToken.toLowerCase())
+                    );
+                    if (bankInfo) {
+                        GLOBAL_STATE.assets[sb.symbol] = {
+                            totalDebt: new BigNumber(bankInfo.totalDebt).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
+                            totalShare: new BigNumber(bankInfo.totalShare).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
+                            reserve: new BigNumber(bankInfo.reserve).dividedBy(`1e${BANK_CONTRACT_DECIMALS}`),
+                            utilization: totalBorrows.dividedBy(totalBorrows.plus(totalLoanable)),
+                            APR,
+                            APY,
+                        };
+                    } else {
+                        console.error(`[ETH v2] No bank info for cToken!. pid: ${ev.positionId}, ${ev.transactionHash} ${ev.logIndex}. Data: ${JSON.stringify(sb)}`);
+                    }
                 }
                 // TODO: confirm TVL calculation
                 // GLOBAL_STATE.tvl = 

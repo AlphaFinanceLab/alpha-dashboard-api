@@ -117,8 +117,8 @@ async function getReservePool(web3: Web3, atBlockN?: number): Promise<string | n
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const reservePool: string = await contract.methods.reservePool().call({}, atBlockN);
         return reservePool;
-    } catch (err) {
-        console.error(`[ERROR reservePool] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR reservePool] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -128,8 +128,8 @@ async function getGlbDebtVal(web3: Web3, atBlockN?: number): Promise<string | nu
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const glbDebtVal: string = await contract.methods.glbDebtVal().call({}, atBlockN);
         return glbDebtVal;
-    } catch (err) {
-        console.error(`[ERROR getGlbDebtVal] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGlbDebtVal] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -139,8 +139,8 @@ async function getGlbDebtShare(web3: Web3, atBlockN?: number): Promise<string | 
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const glbDebtVal: string = await contract.methods.glbDebtShare().call({}, atBlockN);
         return glbDebtVal;
-    } catch (err) {
-        console.error(`[ERROR getGlbDebtShare] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGlbDebtShare] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -156,8 +156,8 @@ async function getTotalETH(web3: Web3, atBlockN?: number): Promise<string | null
         const contract = new web3.eth.Contract((BANK_ABI as unknown) as AbiItem, BANK_ADDRESS);
         const totalETH: string = await contract.methods.totalETH().call({}, atBlockN);
         return totalETH;
-    } catch (err) {
-        console.error(`[ERROR getTotalETH] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getTotalETH] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -172,8 +172,8 @@ export async function syncBankValues(web3: Web3, atBlockN?: number) {
             throw new Error(`Invalid sync values ${JSON.stringify({ reservePool, glbDebt, glbDebtShare, totalETH, atBlockN })}`);
         }
         return { reservePool, glbDebt, glbDebtShare, totalETH };
-    } catch (err) {
-        console.error(`[ERROR syncBankValues] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR syncBankValues] ${JSON.stringify({ msg: err?.message })}`)
         return;
     }
 }
@@ -193,8 +193,8 @@ async function getBankPositionById(web3: Web3, positionId: number, atBlockN?: nu
             return null
         }
         return position;
-    } catch (err) {
-        console.error(`[ERROR getBankPositionById] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getBankPositionById] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -234,8 +234,8 @@ async function getUniswapGoblinLPPayload(
         const token1: string = await contractLP.methods.token1().call({}, atBlockN);
         const reserves: IGoblinLPPayload['reserves'] = await contractLP.methods.getReserves().call({}, atBlockN);
         return { userInfo: { amount, rewardDebt: earned }, totalSupply, decimals, token0, token1, reserves };
-    } catch (err) {
-        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -259,8 +259,8 @@ async function getMastercheffGoblinLPPayload(
         const token1: string = await contractLP.methods.token1().call({}, atBlockN);
         const reserves: IGoblinLPPayload['reserves'] = await contractLP.methods.getReserves().call({}, atBlockN);
         return { userInfo, totalSupply, decimals, token0, token1, reserves };
-    } catch (err) {
-        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err.message })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGoblinLPPayload] ${JSON.stringify({ msg: err?.message })}`)
         return null;
     }
 }
@@ -324,8 +324,8 @@ async function getGoblinPayload(
             console.error(`Position from exchange not handled (${poolMap.exchange}). goblinAddr: ${goblinAddr}, positionId: ${positionId}`);
             return null;
         }
-    } catch (err) {
-        console.error(`[ERROR getGoblinPayload] ${JSON.stringify({ msg: err.message, trace: err.stack })}`)
+    } catch (err: any) {
+        console.error(`[ERROR getGoblinPayload] ${JSON.stringify({ msg: err?.message, trace: err?.stack })}`)
         return null;
     }
 }
@@ -427,10 +427,10 @@ export async function getEvents(
     const eventsReturned = await contract.getPastEvents(eventName, eventProps);
     if (eventsReturned.length) {
         console.log(`Block range (${fromBlock} - ${toBlock}). Events: ${eventsReturned.length}`);
-        await onGetEventCallback(eventsReturned);
     } else {
         console.log(`Block range (${fromBlock} - ${toBlock})is empty of events.`);
     }
+    await onGetEventCallback(eventsReturned);
 }
 
 export async function getEventsInBatches(
@@ -461,7 +461,7 @@ export async function getEventsInBatches(
                 fromBlockLoop = toBlockLoop + 1;
                 const nextBlockLoopEnd = fromBlockLoop + MAX_BLOCKS_TO_QUERY_EACH_REQ;
                 toBlockLoop = nextBlockLoopEnd > endBlock ? endBlock : nextBlockLoopEnd;
-            } catch(e) {
+            } catch(e: any) {
                 requestErrors++;
                 await onGetErrorCallback({ fromBlock: fromBlockLoop, toBlock: toBlockLoop }, e);
                 fromBlockLoop = toBlockLoop + 1;
@@ -473,7 +473,7 @@ export async function getEventsInBatches(
     } else {
         try {
             await getEvents(web3, eventName, onGetEventCallback, startingBlock, endBlock)
-        } catch(e) {
+        } catch(e: any) {
             requestErrors++;
             await onGetErrorCallback({ fromBlock: startingBlock, toBlock: endBlock }, e);
         } finally {

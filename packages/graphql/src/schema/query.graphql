@@ -7,6 +7,7 @@ type Query {
   ethIndicators(from: Int!, to: Int!): [JSON!]
 
   ethEventsV2(from: Int!, to: Int!, types: [String!]!): [ETHEventV2]
+  ethV2Indicators(from: Int!, to: Int!): [JSON!]
 }
 
 # type Mutation {}

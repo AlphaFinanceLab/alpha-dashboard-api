@@ -11,6 +11,9 @@ module.exports = {
                 DATABASE_URL: process.env.DATABASE_URL,
             },
         },
+        // NOTE: disabling pm2 to manage the processes that perform data polling
+        //       because it looks like pm2 may end up not closing the prisma connections (using cron now)
+        /*
         {
             name: 'bsc_sync',
             script: './build/bsc/bsc_sync_events.js',
@@ -27,5 +30,14 @@ module.exports = {
             time: true,
             kill_timeout: 1200000,
         },
+        {
+            name: 'eth_v2_sync',
+            script: './build/ethV2/eth_v2_sync_events.js',
+            cron_restart: "0-59/3 * * * *", // sync every 3 mins
+            autorestart: false,
+            time: true,
+            kill_timeout: 1200000,
+        },
+        */
     ],
 }

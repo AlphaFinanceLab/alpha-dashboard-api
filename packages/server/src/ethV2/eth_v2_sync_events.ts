@@ -1,7 +1,7 @@
 import '../lib/config';
 import Web3 from 'web3';
 import { EventData } from 'web3-eth-contract';
-import { PrismaClient, EventsV2ETH } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import {
     IGetEventCallback,
     IGetErrorCallback,
@@ -10,6 +10,7 @@ import {
 } from './lib/bankV2';
 import { getCoinsInfoAndHistoryMarketData, getOnlyCoingeckoRelevantinfo } from '../lib/coingecko';
 import { delay, IUnwrapPromise } from '../lib/util';
+import { fillHistoricalSnapshots } from './lib/aggregationV2';
 
 const prisma = new PrismaClient();
 
@@ -111,9 +112,9 @@ async function fillEventsContextCoingecko() {
                         { event: 'Liquidate'},
                     ] },
                     { timestamp: { not: null } },
-                    { contextValues: { path: ['poolInfo'], not: null } },
-                    { contextValues: { path: ['collToken'], not: null } },
-                    { contextValues: { path: ['coingecko'], equals: null } },
+                    { contextValues: { path: ['poolInfo'], not: Prisma.AnyNull } },
+                    { contextValues: { path: ['collToken'], not: Prisma.AnyNull } },
+                    { contextValues: { path: ['coingecko'], equals: Prisma.AnyNull } },
                     { irrelevant: false }
                 ]
             },
@@ -129,7 +130,7 @@ async function fillEventsContextCoingecko() {
                     // TODO:!
                     // const contextValues: Partial<IPositionWithShares> | undefined = (ev.contextValues as any);
                     const contextValues: Partial<any> | undefined = (ev.contextValues as any);
-                    if (ev.timestamp && contextValues?.goblinPayload?.lpPayload) {
+                    if (ev.timestamp && contextValues?.lpPayload) {
                         const coingecko = getOnlyCoingeckoRelevantinfo(
                             await getCoinsInfoAndHistoryMarketData(
                                 'ETH', contextValues.poolInfo.tokens.map((address: string) => ({ address, timestamp: ev.timestamp }))
@@ -180,22 +181,22 @@ async function fillEventsContexts(web3: Web3) {
                     { event: 'TakeCollateral'},
                     { event: 'Liquidate'},
                 ] },
-                { returnValues: { path: ['positionId'], not: null } },
+                { returnValues: { path: ['positionId'], not: Prisma.AnyNull } },
                 { OR: [
-                    { contextValues: { equals: null } },
-                    { contextValues: { path: ['poolInfo'], equals: null } },
-                    { contextValues: { path: ['lpPayload'], equals: null } },
-                    { contextValues: { path: ['coingecko'], equals: null } },
+                    { contextValues: { equals: Prisma.AnyNull } },
+                    { contextValues: { path: ['poolInfo'], equals: Prisma.AnyNull } },
+                    { contextValues: { path: ['lpPayload'], equals: Prisma.AnyNull } },
+                    { contextValues: { path: ['coingecko'], equals: Prisma.AnyNull } },
                 ]},
                 { irrelevant: false },
             ]
         }
     };
-    let countWorkOrKillEventsWithEmptyContext = await prisma.eventsV2ETH.count(filterQuery);
+    let countEventsWithIncompleteContext = await prisma.eventsV2ETH.count(filterQuery);
     let errorsCount = 0;
-    while (countWorkOrKillEventsWithEmptyContext && errorsCount < MAX_ERRORS_COUNT_ALLOWED) {
+    while (countEventsWithIncompleteContext && errorsCount < MAX_ERRORS_COUNT_ALLOWED) {
         const eventsWithEmptyContext = await prisma.eventsV2ETH.findMany({ ...filterQuery, take: 100 });
-        console.log(`[ETH v2] Updating ${eventsWithEmptyContext.length} Kill or Work events with empty context.`);
+        console.log(`[ETH v2] Updating ${eventsWithEmptyContext.length} events with empty context.`);
         for (const ev of eventsWithEmptyContext) {
             try {
                 const posId = (ev.returnValues as any).positionId;
@@ -206,6 +207,7 @@ async function fillEventsContexts(web3: Web3) {
                 if (!contextValues && !irrelevant) {
                     throw new Error(`[ETH v2] Can't get event position context. ev: ${JSON.stringify(ev, null, 2)}`);
                 }
+                irrelevant = !!contextValues?.isIrrelevant;
                 await prisma.eventsV2ETH.update({
                     where: {
                         EventsV2ETH_logIndex_transactionHash_unique_constraint: {
@@ -215,11 +217,11 @@ async function fillEventsContexts(web3: Web3) {
                     },
                     data: {
                         irrelevant,
-                        contextValues,
+                        contextValues: contextValues as Prisma.InputJsonObject,
                         updatedAt: new Date(),
                     }
                 });
-                countWorkOrKillEventsWithEmptyContext = await prisma.eventsV2ETH.count(filterQuery);
+                countEventsWithIncompleteContext = await prisma.eventsV2ETH.count(filterQuery);
             } catch(err: any) {
                 errorsCount++;
                 console.error(`[ETH v2] Can't update position context for event. Event: ${ev.event}. ${ev.transactionHash} ${ev.logIndex}. Error: ${err?.message}`);
@@ -227,7 +229,7 @@ async function fillEventsContexts(web3: Web3) {
                     console.error(`[ETH v2] Limit of errors getting event position context reached.`);
                     return;
                 }
-                countWorkOrKillEventsWithEmptyContext = await prisma.eventsV2ETH.count(filterQuery);
+                countEventsWithIncompleteContext = await prisma.eventsV2ETH.count(filterQuery);
             }
         }
     }
@@ -247,11 +249,11 @@ async function countIncompleteEvents() {
                 ] },
                 {
                     OR: [
-                        { returnValues: { path: ['positionId'], equals: null } },
-                        { contextValues: { equals: null } },
-                        { contextValues: { path: ['poolInfo'], equals: null } },
-                        { contextValues: { path: ['lpPayload'], equals: null } },
-                        { contextValues: { path: ['coingecko'], equals: null } },
+                        { returnValues: { path: ['positionId'], equals: Prisma.AnyNull } },
+                        { contextValues: { equals: Prisma.AnyNull } },
+                        { contextValues: { path: ['poolInfo'], equals: Prisma.AnyNull } },
+                        { contextValues: { path: ['lpPayload'], equals: Prisma.AnyNull } },
+                        { contextValues: { path: ['coingecko'], equals: Prisma.AnyNull } },
                         { timestamp: { equals: null } },
                     ]
                 },
@@ -301,7 +303,7 @@ async function main() {
                         positionId = parseInt(singleEvent.returnValues.positionId);
                     }
                     // https://ethereum.stackexchange.com/questions/55155/contract-event-transactionindex-and-logindex/55157
-                    const updateSingleEvent: Omit<EventsV2ETH, 'updatedAt'> = {
+                    const updateSingleEvent = {
                         logIndex: singleEvent.logIndex,
                         transactionHash: singleEvent.transactionHash,
                         transactionIndex: singleEvent.transactionIndex,
@@ -309,7 +311,7 @@ async function main() {
                         address: singleEvent.address,
                         blockNumber: singleEvent.blockNumber,
                         returnValues: singleEvent.returnValues,
-                        contextValues,
+                        contextValues: (contextValues || undefined) as Prisma.InputJsonObject,
                         positionId,
                         irrelevant: contextValues?.isIrrelevant || false,
                         timestamp: timestamp ? parseInt(`${timestamp}`) : null,
@@ -369,7 +371,7 @@ async function main() {
     console.log(`[DONE ETH v2] Sync Events Without errors. Calculating periodic snapshots...`);
 
     // NOTE: TODO: v2 aggregation is a WIP
-    // await fillHistoricalSnapshots();
+    await fillHistoricalSnapshots();
     console.log(`[DONE ETH v2] Snapshots.`);
     return true;
 }

@@ -52,7 +52,7 @@ async function getCoinHistoryMarketData(coinId: string, date: Date): Promise<ICo
             throw new Error(`No market data for ${coinId} at date ${formattedDate}`);
         }
         return coinDataRequest.data;
-    } catch(err) {
+    } catch(err: any) {
         if (err?.response?.status === 429) {
             console.error(`[WARN] getCoinHistoryMarketData failed too many requests, retrying. Msg: `, err.message);
             await delay(10000);

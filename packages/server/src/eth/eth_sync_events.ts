@@ -1,7 +1,7 @@
 import '../lib/config';
 import Web3 from 'web3';
 import { EventData } from 'web3-eth-contract';
-import { PrismaClient, EventsETH } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import {
     IGetEventCallback,
     IGetErrorCallback,
@@ -108,9 +108,9 @@ async function fillEventsContextCoingecko() {
                 AND: [
                     { OR: [{ event: 'Work' }, { event: 'Kill' }] },
                     { timestamp: { not: null } },
-                    { contextValues: { path: ['goblinPayload', 'lpPayload'], not: null } },
-                    { contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], not: null } },
-                    { contextValues: { path: ['coingecko'], equals: null } },
+                    { contextValues: { path: ['goblinPayload', 'lpPayload'], not: Prisma.AnyNull } },
+                    { contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], not: Prisma.AnyNull } },
+                    { contextValues: { path: ['coingecko'], equals: Prisma.AnyNull } },
                     { irrelevant: false }
                 ]
             },
@@ -192,10 +192,10 @@ async function fillEventsContexts(web3: Web3) {
         where: {
             AND: [
                 { OR: [{ event: 'Work' }, { event: 'Kill'}] },
-                { returnValues: { path: ['id'], not: null } },
+                { returnValues: { path: ['id'], not: Prisma.AnyNull } },
                 { OR: [
-                    {contextValues: { equals: null } },
-                    {contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], equals: null } },
+                    {contextValues: { equals: Prisma.AnyNull } },
+                    {contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], equals: Prisma.AnyNull } },
                 ]},
                 { irrelevant: false },
             ]
@@ -229,7 +229,7 @@ async function fillEventsContexts(web3: Web3) {
                     },
                     data: {
                         irrelevant,
-                        contextValues,
+                        contextValues: contextValues as Prisma.InputJsonObject,
                         updatedAt: new Date(),
                     }
                 });
@@ -252,8 +252,8 @@ async function fillEventsBankValueContexts(web3: Web3) {
         where: {
             AND: [
                 { OR: [{ event: 'Work' }, { event: 'Kill'}] },
-                {contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], not: { equals: null } } },
-                {contextValues: { path: ['bankValues', 'reservePool'], equals: null } },
+                {contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], not: { equals: Prisma.AnyNull } } },
+                {contextValues: { path: ['bankValues', 'reservePool'], equals: Prisma.AnyNull } },
                 { irrelevant: false },
             ]
         }
@@ -303,11 +303,11 @@ async function countIncompleteWorkOrKillEvents() {
                 { OR: [{ event: 'Work' }, { event: 'Kill'}] },
                 {
                     OR: [
-                        { returnValues: { path: ['id'], equals: null } },
-                        { contextValues: { equals: null } },
-                        { contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], equals: null } },
-                        { contextValues: { path: ['bankValues', 'reservePool'], equals: null } },
-                        { contextValues: { path: ['coingecko'], equals: null } },
+                        { returnValues: { path: ['id'], equals: Prisma.AnyNull } },
+                        { contextValues: { equals: Prisma.AnyNull } },
+                        { contextValues: { path: ['goblinPayload', 'lpPayload', 'token0'], equals: Prisma.AnyNull } },
+                        { contextValues: { path: ['bankValues', 'reservePool'], equals: Prisma.AnyNull } },
+                        { contextValues: { path: ['coingecko'], equals: Prisma.AnyNull } },
                         { positionId: { equals: null } },
                         { timestamp: { equals: null } },
                     ]
@@ -361,7 +361,7 @@ async function main() {
                         positionId = parseInt(singleEvent.returnValues.id);
                     }
                     // https://ethereum.stackexchange.com/questions/55155/contract-event-transactionindex-and-logindex/55157
-                    const updateSingleEvent: Omit<EventsETH, 'updatedAt'> = {
+                    const updateSingleEvent = {
                         logIndex: singleEvent.logIndex,
                         transactionHash: singleEvent.transactionHash,
                         transactionIndex: singleEvent.transactionIndex,
@@ -369,7 +369,7 @@ async function main() {
                         address: singleEvent.address,
                         blockNumber: singleEvent.blockNumber,
                         returnValues: singleEvent.returnValues,
-                        contextValues,
+                        contextValues: (contextValues || undefined) as Prisma.InputJsonObject,
                         positionId,
                         irrelevant,
                         timestamp: timestamp ? parseInt(`${timestamp}`) : null,
