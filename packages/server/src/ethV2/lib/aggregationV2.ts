@@ -89,12 +89,12 @@ const getLastAggregationStateAndCursor = async () => {
 const deepCloneAssetValue = (av: IAssetValues) => {
     if (!av) { return null; }
     return {
-        totalDebt: av.totalDebt.toString(),
-        totalShare: av.totalShare.toString(),
-        reserve: av.reserve.toString(),
-        utilization: av.utilization.toString(),
-        APR: av.APR.toString(),
-        APY: av.APY.toString(),
+        totalDebt: av.totalDebt.toFixed(4),
+        totalShare: av.totalShare.toFixed(4),
+        reserve: av.reserve.toFixed(4),
+        utilization: av.utilization.toFixed(4),
+        APR: av.APR.toFixed(4),
+        APY: av.APY.toFixed(4),
     };
 };
 
@@ -116,9 +116,9 @@ const deepCloneState = (s: IAggregationState) => ({
         active: s.positions.active,
         inactive: s.positions.inactive,
         liquidated: s.positions.liquidated,
-        liquidatedValue: s.positions.liquidatedValue.toString(),
+        liquidatedValue: s.positions.liquidatedValue.toFixed(4),
         refilled: s.positions.refilled,
-        refilledValue: s.positions.refilledValue.toString(),
+        refilledValue: s.positions.refilledValue.toFixed(4),
     },
     assets: {
         WETH: deepCloneAssetValue(s.assets.WETH),
@@ -134,7 +134,7 @@ const deepCloneState = (s: IAggregationState) => ({
         UNI: deepCloneAssetValue(s.assets.UNI),
         SUSHI: deepCloneAssetValue(s.assets.SUSHI),
     },
-    tvl: s.tvl.toString(),
+    tvl: s.tvl.toFixed(4),
 });
 
 // Valid events: AddDebt, RemoveDebt, Work, Kill, Transfer, Approval)
