@@ -76,3 +76,17 @@ pm2 set pm2-logrotate:rotateInterval 0 0 * * * # How often time rotate logs
 ## About each blockchain RPC api status
 
 Sometimes the RPC status for querying old blocks may be down, a good source of information about status can be [the graph at the status website](https://status.thegraph.com/).
+
+## Workflow for adding a new blockchain
+
+To create a new workflow for a new blockchain. E.g. Avalanche
+
+1. First edit the file schema.prisma to add tables for events, event errors, positions and indicators.
+
+2. Create a new directory at src and create the sync script. E.g. ´./src/avax/avax_sync_events.ts´.
+
+3. Edit models.graphql and schema.graphql to include the new models for avax at the graphql api schema.
+
+4. Update the query.ts and schema.ts files to implement the new graphql models and methods just created.
+
+5. Run the new sync script and validate all data is ok, after the first long run, now update the pm2 ecosystem.config.js. (NOTE: It is required to manually run the first sync because pm2 has a timout limit and will kill the process if it takes too long).
